@@ -36,7 +36,6 @@ RUN pip install --upgrade pip && \
     "websockets>=12.0" \
     "pillow>=10.4.0" \
     "python-slugify>=8.0.0" \
-    "psycopg2-binary>=2.9.0" \
     "tenacity>=9.0.0"
 
 # Code source

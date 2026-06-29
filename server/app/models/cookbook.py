@@ -41,6 +41,8 @@ class Cookbook(Base, TimestampMixin):
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
 
+    owner: Mapped["User"] = relationship(back_populates="owned_cookbooks", lazy="selectin")
+
     members: Mapped[list["CookbookMember"]] = relationship(
         back_populates="cookbook", cascade="all, delete-orphan", lazy="selectin"
     )
@@ -66,7 +68,7 @@ class CookbookMember(Base, TimestampMixin):
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     role: Mapped[CookbookRole] = mapped_column(
-        Enum(CookbookRole, name="cookbook_role"),
+        Enum(CookbookRole, name="cookbook_role", values_callable=lambda x: [e.value for e in x]),
         default=CookbookRole.READER,
         nullable=False,
     )

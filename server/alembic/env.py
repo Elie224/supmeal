@@ -12,7 +12,7 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-# Permettre l'import des modules de l'app
+# Permettre l import des modules de l app
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.core.config import get_settings  # noqa: E402
@@ -29,7 +29,9 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 settings = get_settings()
-config.set_main_option("sqlalchemy.url", settings.sync_database_url)
+# IMPORTANT : Alembic utilise l engine async directement (driver asyncpg)
+# (le driver sync psycopg2 n est pas compatible avec AsyncEngine)
+config.set_main_option("sqlalchemy.url", settings.database_url)
 
 target_metadata = Base.metadata
 

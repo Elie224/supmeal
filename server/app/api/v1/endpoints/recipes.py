@@ -24,6 +24,7 @@ from sqlalchemy.orm import selectinload
 from app.core.config import get_settings
 from app.core.deps import CurrentUser, get_db, _get_optional_user
 from app.models.cookbook import CookbookMember, CookbookRole
+from app.models.user import User
 from app.models.recipe import (
     Comment,
     MealPlan,

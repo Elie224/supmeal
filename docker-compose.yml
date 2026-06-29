@@ -41,10 +41,10 @@ services:
     volumes:
       - supmeal-uploads:/app/uploads
     ports:
-      - "8000:8000"
+      - "8765:8765"
     command: >
       sh -c "alembic upgrade head &&
-             uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+             uvicorn app.main:app --host 0.0.0.0 --port 8765 --reload"
     networks:
       - supmeal-net
 
@@ -53,7 +53,7 @@ services:
       context: ./web
       dockerfile: Dockerfile
       args:
-        VITE_API_URL: http://localhost:8000/api/v1
+        VITE_API_URL: http://localhost:8765/api/v1
     container_name: supmeal-web
     restart: unless-stopped
     depends_on:
@@ -61,7 +61,7 @@ services:
     ports:
       - "5173:5173"
     environment:
-      VITE_API_URL: http://localhost:8000/api/v1
+      VITE_API_URL: http://localhost:8765/api/v1
     volumes:
       - ./web/src:/app/src
     networks:

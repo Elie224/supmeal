@@ -23,7 +23,7 @@ def upgrade() -> None:
     op.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm")
     op.execute("CREATE EXTENSION IF NOT EXISTS unaccent")
 
-    # Enums
+    # Enums PostgreSQL (crees explicitement, reutilises dans les tables)
     user_role = postgresql.ENUM("user", "admin", name="user_role", create_type=True)
     auth_provider = postgresql.ENUM(
         "local", "google", "github", "microsoft", name="auth_provider", create_type=True
@@ -35,6 +35,15 @@ def upgrade() -> None:
     auth_provider.create(op.get_bind(), checkfirst=True)
     cookbook_role.create(op.get_bind(), checkfirst=True)
 
+    # References reutilisables (create_type=False pour eviter les conflits)
+    user_role_col = postgresql.ENUM("user", "admin", name="user_role", create_type=False)
+    auth_provider_col = postgresql.ENUM(
+        "local", "google", "github", "microsoft", name="auth_provider", create_type=False
+    )
+    cookbook_role_col = postgresql.ENUM(
+        "creator", "editor", "commentator", "reader", name="cookbook_role", create_type=False
+    )
+
     # Users
     op.create_table(
         "users",
@@ -44,9 +53,9 @@ def upgrade() -> None:
         sa.Column("full_name", sa.String(120), nullable=True),
         sa.Column("avatar_url", sa.String(500), nullable=True),
         sa.Column("hashed_password", sa.String(255), nullable=True),
-        sa.Column("auth_provider", auth_provider, nullable=False, server_default="local"),
+        sa.Column("auth_provider", auth_provider_col, nullable=False, server_default="local"),
         sa.Column("provider_user_id", sa.String(255), nullable=True, index=True),
-        sa.Column("role", user_role, nullable=False, server_default="user"),
+        sa.Column("role", user_role_col, nullable=False, server_default="user"),
         sa.Column("is_active", sa.Boolean, nullable=False, server_default=sa.true()),
         sa.Column("is_verified", sa.Boolean, nullable=False, server_default=sa.false()),
         sa.Column("dietary_preferences", sa.String(2000), nullable=True),
@@ -85,7 +94,7 @@ def upgrade() -> None:
         sa.Column("id", sa.Integer, primary_key=True),
         sa.Column("cookbook_id", sa.Integer, sa.ForeignKey("cookbooks.id", ondelete="CASCADE"), nullable=False, index=True),
         sa.Column("user_id", sa.Integer, sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True),
-        sa.Column("role", cookbook_role, nullable=False, server_default="reader"),
+        sa.Column("role", cookbook_role_col, nullable=False, server_default="reader"),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.UniqueConstraint("cookbook_id", "user_id", name="uq_cookbook_member"),
