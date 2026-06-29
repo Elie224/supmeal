@@ -39,3 +39,6 @@ web/public/uploads/
 # OS
 *.tmp
 
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
