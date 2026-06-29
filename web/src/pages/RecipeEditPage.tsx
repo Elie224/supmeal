@@ -66,7 +66,7 @@ export default function RecipeEditPage() {
         const { data } = await api.post("/recipes", payload);
         navigate(`/recipes/${data.id}`);
       } else {
-        await api.put(`/recipes/${id}`, payload);
+        await api.patch(`/recipes/${id}`, payload);
         navigate(`/recipes/${id}`);
       }
     } catch (err: any) {
