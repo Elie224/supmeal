@@ -1,0 +1,45 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+  body {
+    @apply bg-cream-50 text-charcoal-900 font-sans antialiased;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded px-4 py-2 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-tomato-500/40 disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .btn-primary {
+    @apply btn bg-tomato-500 text-cream-50 hover:bg-tomato-600;
+  }
+  .btn-secondary {
+    @apply btn bg-charcoal-900 text-cream-50 hover:bg-charcoal-700;
+  }
+  .btn-outline {
+    @apply btn border border-charcoal-300 text-charcoal-700 hover:bg-cream-100;
+  }
+  .btn-ghost {
+    @apply btn text-charcoal-700 hover:bg-cream-100;
+  }
+  .input {
+    @apply w-full rounded border border-charcoal-300 bg-cream-50 px-3 py-2 text-sm focus:border-tomato-500 focus:outline-none focus:ring-2 focus:ring-tomato-500/30 disabled:opacity-50;
+  }
+  .label {
+    @apply block text-sm font-medium text-charcoal-700 mb-1;
+  }
+  .card {
+    @apply rounded-lg bg-white shadow-soft border border-cream-200;
+  }
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full bg-tomato-100 px-2.5 py-0.5 text-xs font-medium text-tomato-700;
+  }
+}

@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+.venv/
+venv/
+env/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+dist/
+build/
+# Node / React
+node_modules/
+dist/
+.vite/
+*.log
+# Env / Secrets
+.env
+.env.local
+.env.*.local
+!.env.example
+# IDE
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+# Docker
+docker-data/
+volumes/
+# Coverage
+.coverage
+htmlcov/
+# Uploads
+server/uploads/
+web/public/uploads/
+# OS
+*.tmp
+
