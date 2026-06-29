@@ -1,10 +1,9 @@
 """OAuth2 : Google, GitHub, Microsoft."""
 
-import secrets
 from typing import Any
 
 from authlib.integrations.starlette_client import OAuth
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,29 +13,13 @@ from app.core.config import get_settings
 from app.core.deps import get_db
 from app.core.security import create_access_token
 from app.models.user import AuthProvider, User
-from app.schemas.user import TokenResponse, UserRead
+from app.schemas.user import UserPublic
 
 router = APIRouter()
 settings = get_settings()
 
-# Authlib config
-config = Config(environ_prefix="")
-config_values: dict[str, str] = {}
-if settings.google_client_id and settings.google_client_secret:
-    config_values.update({
-        "GOOGLE_CLIENT_ID": settings.google_client_id,
-        "GOOGLE_CLIENT_SECRET": settings.google_client_secret,
-    })
-if settings.github_client_id and settings.github_client_secret:
-    config_values.update({
-        "GITHUB_CLIENT_ID": settings.github_client_id,
-        "GITHUB_CLIENT_SECRET": settings.github_client_secret,
-    })
-if settings.microsoft_client_id and settings.microsoft_client_secret:
-    config_values.update({
-        "MICROSOFT_CLIENT_ID": settings.microsoft_client_id,
-        "MICROSOFT_CLIENT_SECRET": settings.microsoft_client_secret,
-    })
+# Config authlib : on lit directement depuis settings (pas de mapping .env)
+config = Config()
 
 oauth = OAuth(config)
 
@@ -98,7 +81,7 @@ async def _get_or_create_user(
         await db.refresh(user)
         return user
 
-    # Creation d'un nouvel utilisateur
+    # Creation d un nouvel utilisateur
     username_base = (name or email.split("@")[0]).lower().replace(" ", "_")[:40]
     username = username_base
     suffix = 1
@@ -135,11 +118,12 @@ async def oauth_login(provider: str, request: Request):
     redirect_uri = redirect_uri_map.get(provider)
     if not redirect_uri:
         raise HTTPException(status_code=400, detail="Provider inconnu")
-    return await oauth.google.authorize_redirect(request, redirect_uri) if False else await getattr(oauth, provider).authorize_redirect(request, redirect_uri)
+    client = getattr(oauth, provider)
+    return await client.authorize_redirect(request, redirect_uri)
 
 
-@router.get("/{provider}/callback", response_model=TokenResponse)
-async def oauth_callback(provider: str, request: Request, db: AsyncSession = Depends(get_db)) -> TokenResponse:
+@router.get("/{provider}/callback")
+async def oauth_callback(provider: str, request: Request, db: AsyncSession = Depends(get_db)):
     if not _is_provider_configured(provider):
         raise HTTPException(status_code=501, detail=f"OAuth {provider} non configure")
     client = getattr(oauth, provider)
@@ -178,7 +162,6 @@ async def oauth_callback(provider: str, request: Request, db: AsyncSession = Dep
     user = await _get_or_create_user(db, provider, provider_user_id, email, name)
     access_token = create_access_token(user.id)
 
-    # Stocker le token pour le renvoyer au front (page web -> localStorage)
-    # Rediriger vers le frontend avec le token en query (pour SPA)
+    # Rediriger vers le frontend avec le token
     frontend_url = f"{settings.app_url}/auth/callback?token={access_token}"
     return RedirectResponse(url=frontend_url)

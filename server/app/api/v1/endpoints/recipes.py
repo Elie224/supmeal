@@ -3,7 +3,7 @@
 import os
 import uuid
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Optional
 
 from fastapi import (
     APIRouter,
@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.config import get_settings
-from app.core.deps import CurrentUser, get_db
+from app.core.deps import CurrentUser, get_db, _get_optional_user
 from app.models.cookbook import CookbookMember, CookbookRole
 from app.models.recipe import (
     Comment,
@@ -204,7 +204,7 @@ async def create_recipe(
 @router.get("", response_model=list[RecipeSummary])
 async def list_recipes(
     db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser | None = None,
+    current_user: Optional[User] = Depends(_get_optional_user),
     cookbook_id: int | None = None,
     tag_ids: Annotated[list[int] | None, Query()] = None,
     ingredient: str | None = None,
@@ -279,7 +279,7 @@ async def list_recipes(
 
 @router.get("/{recipe_id}", response_model=RecipeRead)
 async def get_recipe(
-    recipe_id: int, db: AsyncSession = Depends(get_db), current_user: CurrentUser | None = None
+    recipe_id: int, db: AsyncSession = Depends(get_db), current_user: Optional[User] = Depends(_get_optional_user)
 ) -> RecipeRead:
     result = await db.execute(
         select(Recipe)
@@ -528,7 +528,7 @@ async def add_comment(
 
 @router.get("/{recipe_id}/comments", response_model=list[CommentRead])
 async def list_comments(
-    recipe_id: int, db: AsyncSession = Depends(get_db), _: CurrentUser | None = None
+    recipe_id: int, db: AsyncSession = Depends(get_db), _: Optional[User] = Depends(_get_optional_user)
 ) -> list[CommentRead]:
     result = await db.execute(
         select(Comment).where(Comment.recipe_id == recipe_id).order_by(Comment.created_at)
