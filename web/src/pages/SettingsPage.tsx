@@ -1,12 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Download, Upload } from "lucide-react";
 import { api } from "../lib/api";
-import { useAuthStore } from "../stores/auth";
 import type { User } from "../lib/types";
 
 export default function SettingsPage() {
-  const user = useAuthStore((s) => s.user);
   const qc = useQueryClient();
   const [pwd, setPwd] = useState({ current: "", next: "" });
   const [prefs, setPrefs] = useState({
@@ -20,15 +18,18 @@ export default function SettingsPage() {
   const meQ = useQuery({
     queryKey: ["me"],
     queryFn: async () => (await api.get<User>("/auth/me")).data,
-    onSuccess: (d) => {
-      setPrefs({
-        default_servings: d.default_servings,
-        dietary_preferences: d.dietary_preferences || "",
-        allergies: d.allergies || "",
-        favorite_cuisines: d.favorite_cuisines || "",
-      });
-    },
   });
+
+  useEffect(() => {
+    if (meQ.data) {
+      setPrefs({
+        default_servings: meQ.data.default_servings,
+        dietary_preferences: meQ.data.dietary_preferences || "",
+        allergies: meQ.data.allergies || "",
+        favorite_cuisines: meQ.data.favorite_cuisines || "",
+      });
+    }
+  }, [meQ.data]);
 
   const updatePrefs = useMutation({
     mutationFn: async () => (await api.patch("/users/me", prefs)).data,
@@ -86,10 +87,7 @@ export default function SettingsPage() {
 
       <section className="card p-5 space-y-3">
         <h2 className="font-display font-semibold text-lg">Securite</h2>
-        <form
-          onSubmit={(e) => { e.preventDefault(); changePwd.mutate(); }}
-          className="space-y-3"
-        >
+        <form onSubmit={(e) => { e.preventDefault(); changePwd.mutate(); }} className="space-y-3">
           <div>
             <label className="label">Mot de passe actuel</label>
             <input type="password" className="input" value={pwd.current} onChange={(e) => setPwd({ ...pwd, current: e.target.value })} />
@@ -125,9 +123,7 @@ export default function SettingsPage() {
 
       <section className="card p-5 space-y-3">
         <h2 className="font-display font-semibold text-lg">Donnees</h2>
-        <p className="text-sm text-charcoal-500">
-          Vos donnees sont en clair dans le fichier exporte. Ne partagez pas ce fichier publiquement.
-        </p>
+        <p className="text-sm text-charcoal-500">Vos donnees sont en clair dans le fichier exporte. Ne partagez pas ce fichier publiquement.</p>
         <div className="flex gap-2">
           <button onClick={() => handleExport("json")} className="btn-outline">
             <Download className="w-4 h-4" /> Exporter JSON
@@ -141,21 +137,11 @@ export default function SettingsPage() {
           <div className="flex gap-2">
             <label className="btn-outline cursor-pointer">
               <Upload className="w-4 h-4" /> Importer JSON
-              <input
-                type="file"
-                accept=".json"
-                hidden
-                onChange={(e) => e.target.files?.[0] && handleImport(e.target.files[0], "json")}
-              />
+              <input type="file" accept=".json" hidden onChange={(e) => e.target.files?.[0] && handleImport(e.target.files[0], "json")} />
             </label>
             <label className="btn-outline cursor-pointer">
               <Upload className="w-4 h-4" /> Importer CSV
-              <input
-                type="file"
-                accept=".csv"
-                hidden
-                onChange={(e) => e.target.files?.[0] && handleImport(e.target.files[0], "csv")}
-              />
+              <input type="file" accept=".csv" hidden onChange={(e) => e.target.files?.[0] && handleImport(e.target.files[0], "csv")} />
             </label>
           </div>
         </div>

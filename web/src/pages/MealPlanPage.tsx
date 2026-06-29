@@ -5,13 +5,11 @@ import { fr } from "date-fns/locale";
 import { ChevronLeft, ChevronRight, ShoppingCart } from "lucide-react";
 import { api } from "../lib/api";
 import type { MealPlan, RecipeSummary } from "../lib/types";
-import { useAuthStore } from "../stores/auth";
 
 const SLOTS = ["breakfast", "lunch", "dinner", "snack"] as const;
 const SLOT_LABELS: Record<string, string> = { breakfast: "Matin", lunch: "Midi", dinner: "Soir", snack: "Collation" };
 
 export default function MealPlanPage() {
-  const user = useAuthStore((s) => s.user);
   const qc = useQueryClient();
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));

@@ -70,7 +70,6 @@ export default function CookbookPage() {
   const cb = cookbookQ.data;
   const myMember = cb.members.find((m) => m.user.id === user?.id);
   const myRole = myMember?.role;
-  const canEdit = myRole === "creator" || myRole === "editor";
   const canDiscuss = myRole && myRole !== "reader";
   const isCreator = myRole === "creator";
 
