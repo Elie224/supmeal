@@ -7,7 +7,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -31,14 +31,11 @@ router = APIRouter()
 @router.get("/json")
 async def export_json(current_user: CurrentUser, db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
     """Exporte toutes les recettes personnelles + cookbooks en JSON brut."""
+    member_cb_subq = select(CookbookMember.cookbook_id).where(CookbookMember.user_id == current_user.id)
     recipes_result = await db.execute(
         select(Recipe)
-        .options(
-            selectinload(Recipe.ingredients),
-            selectinload(Recipe.steps),
-            selectinload(Recipe.tags),
-        )
-        .where(Recipe.owner_id == current_user.id)
+        .options(selectinload(Recipe.ingredients), selectinload(Recipe.steps), selectinload(Recipe.tags))
+        .where(or_(Recipe.owner_id == current_user.id, Recipe.cookbook_id.in_(member_cb_subq)))
     )
     recipes = [recipe_to_dict(r) for r in recipes_result.scalars().unique().all()]
 
@@ -84,7 +81,7 @@ async def export_csv(current_user: CurrentUser, db: AsyncSession = Depends(get_d
             selectinload(Recipe.steps),
             selectinload(Recipe.tags),
         )
-        .where(Recipe.owner_id == current_user.id)
+        .where(or_(Recipe.owner_id == current_user.id, Recipe.cookbook_id.in_(member_cb_subq)))
     )
     recipes = recipes_result.scalars().unique().all()
 

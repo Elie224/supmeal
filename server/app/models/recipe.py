@@ -142,15 +142,20 @@ class MealPlan(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    cookbook_id: Mapped[int | None] = mapped_column(
+        ForeignKey("cookbooks.id", ondelete="CASCADE"), nullable=True, index=True
+    )
     recipe_id: Mapped[int] = mapped_column(ForeignKey("recipes.id", ondelete="CASCADE"), nullable=False, index=True)
     planned_date: Mapped[str] = mapped_column(String(10), nullable=False, index=True)  # YYYY-MM-DD
     meal_slot: Mapped[str] = mapped_column(String(20), nullable=False)  # breakfast/lunch/dinner/snack
     servings: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
 
     recipe: Mapped["Recipe"] = relationship(back_populates="meal_plans", lazy="selectin")
+    cookbook: Mapped["Cookbook | None"] = relationship(lazy="selectin")
 
     __table_args__ = (
         Index("ix_meal_plans_user_date", "user_id", "planned_date"),
+        Index("ix_meal_plans_cookbook_date", "cookbook_id", "planned_date"),
     )
 
 

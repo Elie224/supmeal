@@ -11,14 +11,34 @@ export default function DashboardPage() {
   const [search, setSearch] = useState("");
   const [favOnly, setFavOnly] = useState(false);
   const [tagFilter, setTagFilter] = useState<number | null>(null);
+  const [tagCategoryFilter, setTagCategoryFilter] = useState<string>("");
+  const [cookbookFilter, setCookbookFilter] = useState<number | null>(null);
+  const [ingredientFilter, setIngredientFilter] = useState("");
+  const [maxPrepTime, setMaxPrepTime] = useState<number | "">("");
+  const [maxCookTime, setMaxCookTime] = useState<number | "">("");
 
   const recipesQ = useQuery({
-    queryKey: ["recipes", search, favOnly, tagFilter],
+    queryKey: [
+      "recipes",
+      search,
+      favOnly,
+      tagFilter,
+      tagCategoryFilter,
+      cookbookFilter,
+      ingredientFilter,
+      maxPrepTime,
+      maxCookTime,
+    ],
     queryFn: async () => {
       const params: Record<string, any> = {};
       if (search) params.search = search;
       if (favOnly) params.favorites_only = true;
       if (tagFilter) params.tag_ids = [tagFilter];
+      if (tagCategoryFilter) params.tag_category = tagCategoryFilter;
+      if (cookbookFilter) params.cookbook_id = cookbookFilter;
+      if (ingredientFilter) params.ingredient = ingredientFilter;
+      if (maxPrepTime !== "") params.max_prep_time = maxPrepTime;
+      if (maxCookTime !== "") params.max_cook_time = maxCookTime;
       const { data } = await api.get<RecipeSummary[]>("/recipes", { params });
       return data;
     },
@@ -59,6 +79,50 @@ export default function DashboardPage() {
             <Filter className="w-4 h-4" />
             Favoris
           </button>
+        </div>
+        <div className="mt-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-2">
+          <select
+            className="input"
+            value={cookbookFilter ?? ""}
+            onChange={(e) => setCookbookFilter(e.target.value ? Number(e.target.value) : null)}
+          >
+            <option value="">Tous les cookbooks</option>
+            {cookbooksQ.data?.map((cb) => (
+              <option key={cb.id} value={cb.id}>{cb.name}</option>
+            ))}
+          </select>
+          <input
+            className="input"
+            placeholder="Ingredient"
+            value={ingredientFilter}
+            onChange={(e) => setIngredientFilter(e.target.value)}
+          />
+          <input
+            className="input"
+            type="number"
+            min={0}
+            placeholder="Prep max (min)"
+            value={maxPrepTime}
+            onChange={(e) => setMaxPrepTime(e.target.value ? Number(e.target.value) : "")}
+          />
+          <input
+            className="input"
+            type="number"
+            min={0}
+            placeholder="Cuisson max (min)"
+            value={maxCookTime}
+            onChange={(e) => setMaxCookTime(e.target.value ? Number(e.target.value) : "")}
+          />
+          <select
+            className="input"
+            value={tagCategoryFilter}
+            onChange={(e) => setTagCategoryFilter(e.target.value)}
+          >
+            <option value="">Toutes categories</option>
+            {Array.from(new Set((tagsQ.data || []).map((t: any) => t.category).filter(Boolean))).map((category: any) => (
+              <option key={category} value={category}>{category}</option>
+            ))}
+          </select>
         </div>
         {tagsQ.data && tagsQ.data.length > 0 && (
           <div className="mt-3 flex flex-wrap gap-2">

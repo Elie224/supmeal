@@ -14,6 +14,7 @@ export default function SettingsPage() {
     favorite_cuisines: "",
   });
   const [msg, setMsg] = useState<string | null>(null);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
 
   const meQ = useQuery({
     queryKey: ["me"],
@@ -49,7 +50,25 @@ export default function SettingsPage() {
     onError: (e: any) => setMsg(e?.response?.data?.detail || "Erreur"),
   });
 
+  const uploadAvatar = useMutation({
+    mutationFn: async (file: File) => {
+      const fd = new FormData();
+      fd.append("file", file);
+      return (await api.post("/users/me/avatar", fd, { headers: { "Content-Type": "multipart/form-data" } })).data;
+    },
+    onSuccess: () => {
+      setMsg("Avatar mis a jour.");
+      setAvatarFile(null);
+      qc.invalidateQueries({ queryKey: ["me"] });
+    },
+    onError: (e: any) => setMsg(e?.response?.data?.detail || "Erreur upload avatar"),
+  });
+
   const handleExport = async (format: "json" | "csv") => {
+    const confirmed = window.confirm(
+      "Le fichier exporte contient vos donnees en clair. Voulez-vous continuer ?"
+    );
+    if (!confirmed) return;
     const res = await api.get(`/import-export/${format}`, { responseType: "blob" });
     const url = URL.createObjectURL(res.data);
     const a = document.createElement("a");
@@ -68,6 +87,11 @@ export default function SettingsPage() {
 
   if (meQ.isLoading || !meQ.data) return <div>Chargement...</div>;
 
+  const oauthUrl = (provider: "google" | "github" | "microsoft") => {
+    const base = import.meta.env.VITE_API_URL || "/api/v1";
+    return `${base}/auth/oauth/${provider}/login`;
+  };
+
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       <h1 className="font-display font-bold text-2xl text-charcoal-900">Parametres</h1>
@@ -75,6 +99,34 @@ export default function SettingsPage() {
 
       <section className="card p-5 space-y-3">
         <h2 className="font-display font-semibold text-lg">Profil</h2>
+        <div className="flex items-center gap-4">
+          <div className="w-16 h-16 rounded-full bg-cream-100 overflow-hidden flex items-center justify-center">
+            {meQ.data.avatar_url ? (
+              <img src={meQ.data.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-charcoal-500 text-sm">N/A</span>
+            )}
+          </div>
+          <div className="space-y-2">
+            <label className="btn-outline cursor-pointer text-xs">
+              Choisir un avatar
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                hidden
+                onChange={(e) => setAvatarFile(e.target.files?.[0] || null)}
+              />
+            </label>
+            <button
+              type="button"
+              className="btn-primary text-xs"
+              disabled={!avatarFile || uploadAvatar.isPending}
+              onClick={() => avatarFile && uploadAvatar.mutate(avatarFile)}
+            >
+              {uploadAvatar.isPending ? "Upload..." : "Uploader"}
+            </button>
+          </div>
+        </div>
         <div>
           <label className="label">Nom d'utilisateur</label>
           <input className="input" disabled value={meQ.data.username} />
@@ -98,6 +150,16 @@ export default function SettingsPage() {
           </div>
           <button type="submit" className="btn-primary" disabled={!pwd.current || !pwd.next}>Changer le mot de passe</button>
         </form>
+        <div className="border-t border-cream-200 pt-3">
+          <p className="text-sm text-charcoal-500 mb-2">
+            Lier un provider OAuth: si le compte provider utilise le meme email, il sera associe.
+          </p>
+          <div className="flex gap-2">
+            <a href={oauthUrl("google")} className="btn-outline text-xs">Lier Google</a>
+            <a href={oauthUrl("github")} className="btn-outline text-xs">Lier GitHub</a>
+            <a href={oauthUrl("microsoft")} className="btn-outline text-xs">Lier Microsoft</a>
+          </div>
+        </div>
       </section>
 
       <section className="card p-5 space-y-3">

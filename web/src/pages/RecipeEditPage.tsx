@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Plus, Trash2 } from "lucide-react";
 import { api } from "../lib/api";
-import type { Recipe, Ingredient, Step } from "../lib/types";
+import { useQuery } from "@tanstack/react-query";
+import type { Recipe, Ingredient, Step, Tag } from "../lib/types";
 
 export default function RecipeEditPage() {
   const { id } = useParams<{ id: string }>();
@@ -27,6 +28,12 @@ export default function RecipeEditPage() {
   const [steps, setSteps] = useState<Step[]>([{ content: "", position: 0 }]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+
+  const tagsQ = useQuery({
+    queryKey: ["tags"],
+    queryFn: async () => (await api.get<Tag[]>("/tags")).data,
+  });
 
   useEffect(() => {
     if (!isNew) {
@@ -64,9 +71,23 @@ export default function RecipeEditPage() {
     try {
       if (isNew) {
         const { data } = await api.post("/recipes", payload);
+        if (imageFile) {
+          const fd = new FormData();
+          fd.append("file", imageFile);
+          await api.post(`/recipes/${data.id}/image`, fd, {
+            headers: { "Content-Type": "multipart/form-data" },
+          });
+        }
         navigate(`/recipes/${data.id}`);
       } else {
         await api.patch(`/recipes/${id}`, payload);
+        if (imageFile) {
+          const fd = new FormData();
+          fd.append("file", imageFile);
+          await api.post(`/recipes/${id}/image`, fd, {
+            headers: { "Content-Type": "multipart/form-data" },
+          });
+        }
         navigate(`/recipes/${id}`);
       }
     } catch (err: any) {
@@ -119,6 +140,48 @@ export default function RecipeEditPage() {
           <label className="label">URL de la source</label>
           <input className="input" type="url" value={form.source_url} onChange={(e) => setForm({ ...form, source_url: e.target.value })} />
         </div>
+
+        <div>
+          <label className="label">Image de la recette</label>
+          {form.image_url && (
+            <img src={form.image_url} alt="Apercu" className="w-full max-w-xs h-40 object-cover rounded border border-cream-200 mb-2" />
+          )}
+          <input
+            className="input"
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            onChange={(e) => setImageFile(e.target.files?.[0] || null)}
+          />
+          <p className="text-xs text-charcoal-500 mt-1">Formats: JPEG, PNG, WEBP, GIF (max 5 Mo)</p>
+        </div>
+
+        {tagsQ.data && tagsQ.data.length > 0 && (
+          <div>
+            <label className="label">Tags</label>
+            <div className="flex flex-wrap gap-2">
+              {tagsQ.data.map((tag) => {
+                const selected = form.tag_ids.includes(tag.id);
+                return (
+                  <button
+                    key={tag.id}
+                    type="button"
+                    className={`badge ${selected ? "bg-tomato-500 text-cream-50" : ""}`}
+                    onClick={() => {
+                      setForm({
+                        ...form,
+                        tag_ids: selected
+                          ? form.tag_ids.filter((id) => id !== tag.id)
+                          : [...form.tag_ids, tag.id],
+                      });
+                    }}
+                  >
+                    {tag.name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         <div>
           <div className="flex items-center justify-between mb-2">

@@ -27,7 +27,6 @@ from app.models.cookbook import CookbookMember, CookbookRole
 from app.models.user import User
 from app.models.recipe import (
     Comment,
-    MealPlan,
     Recipe,
     RecipeIngredient,
     RecipeStep,
@@ -37,8 +36,6 @@ from app.models.recipe import (
 from app.schemas.recipe import (
     CommentCreate,
     CommentRead,
-    MealPlanCreate,
-    MealPlanRead,
     RecipeCreate,
     RecipeRead,
     RecipeSummary,
@@ -136,13 +133,16 @@ async def create_recipe(
     payload: RecipeCreate, current_user: CurrentUser, db: AsyncSession = Depends(get_db)
 ) -> RecipeRead:
     # Si cookbook_id fourni, verifier les droits (editeur/creator)
-    if payload.tag_ids is None:
-        tag_ids: list[int] = []
-    else:
-        tag_ids = payload.tag_ids
-    # Note: tag_ids est sur RecipeBase, on le recupere via payload
-    tag_ids = getattr(payload, "tag_ids", []) or []
+    tag_ids: list[int] = getattr(payload, "tag_ids", []) or []
 
+    # Validation du cookbook cible
+    cookbook_id = getattr(payload, "cookbook_id", None)
+    if cookbook_id is not None:
+        role = await _cookbook_role(db, cookbook_id, current_user.id)
+        if role is None:
+            raise HTTPException(status_code=403, detail="Vous n etes pas membre de ce cookbook")
+        if role not in (CookbookRole.CREATOR, CookbookRole.EDITOR):
+            raise HTTPException(status_code=403, detail="Permission insuffisante")
     recipe = Recipe(
         title=payload.title,
         description=payload.description,
@@ -156,7 +156,7 @@ async def create_recipe(
         is_favorite=payload.is_favorite,
         is_public=payload.is_public,
         owner_id=current_user.id,
-        cookbook_id=None,  # gere via endpoint cookbook
+        cookbook_id=cookbook_id,
     )
     db.add(recipe)
     await db.flush()
@@ -208,6 +208,7 @@ async def list_recipes(
     current_user: Optional[User] = Depends(_get_optional_user),
     cookbook_id: int | None = None,
     tag_ids: Annotated[list[int] | None, Query()] = None,
+    tag_category: str | None = None,
     ingredient: str | None = None,
     max_prep_time: int | None = None,
     max_cook_time: int | None = None,
@@ -259,6 +260,14 @@ async def list_recipes(
         for tid in tag_ids:
             tag_subq = select(RecipeTag.recipe_id).where(RecipeTag.tag_id == tid)
             conditions.append(Recipe.id.in_(tag_subq))
+
+    if tag_category:
+        category_subq = (
+            select(RecipeTag.recipe_id)
+            .join(Tag, Tag.id == RecipeTag.tag_id)
+            .where(Tag.category == tag_category)
+        )
+        conditions.append(Recipe.id.in_(category_subq))
 
     if search:
         # Recherche plein texte + trigram en fallback
@@ -442,61 +451,6 @@ async def upload_recipe_image(
     await db.commit()
     await db.refresh(recipe)
     return _recipe_to_read(recipe)
-
-
-# ---------- Meal Plans ----------
-
-@router.post("/meal-plans", response_model=MealPlanRead, status_code=201)
-async def create_meal_plan(
-    payload: MealPlanCreate, current_user: CurrentUser, db: AsyncSession = Depends(get_db)
-) -> MealPlanRead:
-    result = await db.execute(select(Recipe).where(Recipe.id == payload.recipe_id))
-    if not result.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Recette introuvable")
-    mp = MealPlan(
-        user_id=current_user.id,
-        recipe_id=payload.recipe_id,
-        planned_date=payload.planned_date,
-        meal_slot=payload.meal_slot,
-        servings=payload.servings,
-    )
-    db.add(mp)
-    await db.commit()
-    await db.refresh(mp)
-    return MealPlanRead.model_validate(mp)
-
-
-@router.get("/meal-plans/me", response_model=list[MealPlanRead])
-async def list_my_meal_plans(
-    start_date: str | None = None,
-    end_date: str | None = None,
-    current_user: CurrentUser = ...,
-    db: AsyncSession = Depends(get_db),
-) -> list[MealPlanRead]:
-    stmt = select(MealPlan).where(MealPlan.user_id == current_user.id)
-    if start_date:
-        stmt = stmt.where(MealPlan.planned_date >= start_date)
-    if end_date:
-        stmt = stmt.where(MealPlan.planned_date <= end_date)
-    stmt = stmt.order_by(MealPlan.planned_date)
-    result = await db.execute(stmt)
-    return [MealPlanRead.model_validate(mp) for mp in result.scalars().all()]
-
-
-@router.delete("/meal-plans/{plan_id}", status_code=204)
-async def delete_meal_plan(
-    plan_id: int, current_user: CurrentUser, db: AsyncSession = Depends(get_db)
-) -> None:
-    result = await db.execute(
-        select(MealPlan).where(
-            (MealPlan.id == plan_id) & (MealPlan.user_id == current_user.id)
-        )
-    )
-    mp = result.scalar_one_or_none()
-    if not mp:
-        raise HTTPException(status_code=404, detail="Plan introuvable")
-    await db.delete(mp)
-    await db.commit()
 
 
 # ---------- Commentaires ----------

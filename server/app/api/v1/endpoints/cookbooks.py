@@ -23,6 +23,7 @@ from app.models.cookbook import (
     CookbookRole,
 )
 from app.models.recipe import Recipe
+from app.models.recipe import RecipeIngredient, RecipeStep
 from app.models.user import User
 from app.schemas.cookbook import (
     AddMemberRequest,
@@ -245,6 +246,7 @@ async def list_cookbook_recipes(
     db: AsyncSession = Depends(get_db),
     search: str | None = None,
     tag_ids: Annotated[list[int] | None, Query()] = None,
+    tag_category: str | None = None,
     ingredient: str | None = None,
     max_prep_time: int | None = None,
     favorites_only: bool = False,
@@ -278,6 +280,14 @@ async def list_cookbook_recipes(
         for tid in tag_ids:
             subq = select(RecipeTag.recipe_id).where(RecipeTag.tag_id == tid)
             stmt = stmt.where(Recipe.id.in_(subq))
+    if tag_category:
+        from app.models.recipe import RecipeTag, Tag
+        category_subq = (
+            select(RecipeTag.recipe_id)
+            .join(Tag, Tag.id == RecipeTag.tag_id)
+            .where(Tag.category == tag_category)
+        )
+        stmt = stmt.where(Recipe.id.in_(category_subq))
     if ingredient:
         from app.models.recipe import RecipeIngredient
         ing_subq = select(RecipeIngredient.recipe_id).where(
@@ -347,7 +357,6 @@ async def create_cookbook_recipe(
 
     await db.commit()
     # search_vector
-    from sqlalchemy import text as sa_text
     from app.api.v1.endpoints.recipes import _build_search_vector
     await _build_search_vector(recipe.id, db)
     await db.commit()

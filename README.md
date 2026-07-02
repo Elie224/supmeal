@@ -15,15 +15,15 @@ Alternative a Mealie, Tandoor Recipes, Paprika : creer, importer, organiser et p
 
 ## Demarrage rapide
 
-`ash
+```bash
 git clone <url>
 cd supmeal
 cp .env.example .env
 docker compose up --build
-`
+```
 
-- API : http://localhost:8000
-- Documentation OpenAPI : http://localhost:8000/docs
+- API : http://localhost:8765
+- Documentation OpenAPI : http://localhost:8765/docs
 - Web : http://localhost:5173
 
 ## Structure

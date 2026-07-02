@@ -13,6 +13,9 @@ export default function RecipePage() {
   const qc = useQueryClient();
   const user = useAuthStore((s) => s.user);
   const [comment, setComment] = useState("");
+  const [showPlanForm, setShowPlanForm] = useState(false);
+  const [planDate, setPlanDate] = useState("");
+  const [planSlot, setPlanSlot] = useState<"breakfast" | "lunch" | "dinner" | "snack">("dinner");
 
   const recipeQ = useQuery({
     queryKey: ["recipe", id],
@@ -44,6 +47,24 @@ export default function RecipePage() {
     },
   });
 
+  const addToPlan = useMutation({
+    mutationFn: async () => {
+      const recipe = recipeQ.data;
+      if (!recipe) throw new Error("Recette introuvable");
+      return (await api.post("/meal-plans", {
+        recipe_id: Number(id),
+        cookbook_id: recipe.cookbook_id,
+        planned_date: planDate,
+        meal_slot: planSlot,
+        servings: recipe.servings,
+      })).data;
+    },
+    onSuccess: () => {
+      setShowPlanForm(false);
+      setPlanDate("");
+    },
+  });
+
   if (recipeQ.isLoading) return <div>Chargement...</div>;
   if (!recipeQ.data) return <div>Recette introuvable</div>;
 
@@ -61,7 +82,7 @@ export default function RecipePage() {
             <Heart className={cn("w-4 h-4", r.is_favorite && "fill-tomato-500")} />
             {r.is_favorite ? "Favori" : "Ajouter aux favoris"}
           </button>
-          <button className="btn-outline">
+          <button className="btn-outline" type="button" onClick={() => setShowPlanForm(true)}>
             <Calendar className="w-4 h-4" /> Planifier
           </button>
           {isOwner && (
@@ -95,6 +116,45 @@ export default function RecipePage() {
             </div>
           )}
         </div>
+      </div>
+
+      <div className="card p-5 space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="font-display font-semibold text-lg text-charcoal-900">Planification</h2>
+          <button type="button" className="btn-outline" onClick={() => setShowPlanForm((v) => !v)}>
+            <Calendar className="w-4 h-4" /> Ajouter au planning
+          </button>
+        </div>
+        {showPlanForm && (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (planDate) addToPlan.mutate();
+            }}
+            className="grid md:grid-cols-4 gap-2"
+          >
+            <input
+              type="date"
+              className="input"
+              value={planDate}
+              onChange={(e) => setPlanDate(e.target.value)}
+              required
+            />
+            <select
+              className="input"
+              value={planSlot}
+              onChange={(e) => setPlanSlot(e.target.value as "breakfast" | "lunch" | "dinner" | "snack")}
+            >
+              <option value="breakfast">Matin</option>
+              <option value="lunch">Midi</option>
+              <option value="dinner">Soir</option>
+              <option value="snack">Collation</option>
+            </select>
+            <button type="submit" className="btn-primary" disabled={!planDate || addToPlan.isPending}>
+              {addToPlan.isPending ? "Ajout..." : "Planifier"}
+            </button>
+          </form>
+        )}
       </div>
 
       <div className="grid md:grid-cols-2 gap-6">

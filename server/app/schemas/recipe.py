@@ -1,7 +1,7 @@
 """Schemas Pydantic lies a Recipe, Ingredient, Step, Tag."""
 
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -80,6 +80,7 @@ class RecipeBase(BaseModel):
 class RecipeCreate(RecipeBase):
     ingredients: list[IngredientCreate] = []
     steps: list[StepCreate] = []
+    cookbook_id: int | None = None  # Optionnel : creer dans un cookbook directement
 
 
 class RecipeUpdate(BaseModel):
@@ -148,6 +149,7 @@ class RecipeFilter(BaseModel):
 
 class MealPlanBase(BaseModel):
     recipe_id: int
+    cookbook_id: int | None = None
     planned_date: str  # YYYY-MM-DD
     meal_slot: str  # breakfast/lunch/dinner/snack
     servings: int = 4

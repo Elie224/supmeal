@@ -1,7 +1,7 @@
 # API REST - reference rapide
 
-Base URL : `http://localhost:8000/api/v1`
-Documentation interactive : `http://localhost:8000/docs` (Swagger UI)
+Base URL : `http://localhost:8765/api/v1`
+Documentation interactive : `http://localhost:8765/docs` (Swagger UI)
 
 ## Auth
 

@@ -11,10 +11,14 @@ export default function CookbooksPage() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
 
+  const [page, setPage] = useState(0)
+  const PAGE_SIZE = 12
   const list = useQuery({
-    queryKey: ["cookbooks"],
+    queryKey: ["cookbooks", page],
     queryFn: async () => (await api.get<CookbookSummary[]>("/cookbooks")).data,
-  });
+  })
+  const visibleCookbooks = list.data ? list.data.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE) : []
+  const hasMore = list.data ? (page + 1) * PAGE_SIZE < list.data.length : false;
 
   const create = useMutation({
     mutationFn: async () => (await api.post("/cookbooks", { name, description })).data,
@@ -54,7 +58,7 @@ export default function CookbooksPage() {
 
       {list.data && list.data.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {list.data.map((cb) => (
+          {visibleCookbooks.map((cb) => (
             <Link key={cb.id} to={`/cookbooks/${cb.id}`} className="card p-4 hover:shadow-card">
               <h3 className="font-display font-semibold text-lg text-charcoal-900">{cb.name}</h3>
               {cb.description && <p className="text-sm text-charcoal-500 mt-1 line-clamp-2">{cb.description}</p>}
@@ -68,6 +72,13 @@ export default function CookbooksPage() {
         </div>
       ) : (
         <div className="card p-8 text-center text-charcoal-500">Aucun cookbook. Creez-en un pour partager vos recettes.</div>
+      )}
+      {list.data && list.data.length > PAGE_SIZE && (
+        <div className="flex justify-center pt-2">
+          <button onClick={() => setPage((p) => p + 1)} disabled={!hasMore} className="btn-outline">
+            {hasMore ? "Charger plus" : "Fin"}
+          </button>
+        </div>
       )}
     </div>
   );

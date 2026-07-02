@@ -4,7 +4,7 @@
 
 - Docker 20.10+ et Docker Compose v2+
 - 2 Go de RAM minimum
-- Ports 5432, 8000, 5173 disponibles
+- Ports 5432, 8765, 5173 disponibles
 
 ## Demarrage rapide (developpement)
 
@@ -27,8 +27,8 @@ docker compose up --build
 L application est accessible sur :
 
 - Client web : http://localhost:5173
-- API : http://localhost:8000
-- Documentation : http://localhost:8000/docs
+- API : http://localhost:8765
+- Documentation : http://localhost:8765/docs
 - PostgreSQL : localhost:5432
 
 Au premier lancement, les migrations Alembic sont executees automatiquement et la base est creee.
@@ -71,7 +71,7 @@ server {
     server_name supmeal.example.com;
 
     location /api/ {
-        proxy_pass http://localhost:8000/api/;
+        proxy_pass http://localhost:8765/api/;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     }
@@ -88,7 +88,7 @@ server {
 Cela desactive le reload automatique d uvicorn. Utiliser plutot :
 
 ```bash
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
+uvicorn app.main:app --host 0.0.0.0 --port 8765 --workers 4
 ```
 
 ### Volumes persistants

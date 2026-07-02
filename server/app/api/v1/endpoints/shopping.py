@@ -1,7 +1,6 @@
 """Endpoints Shopping List : generation automatique depuis le planning."""
 
 from collections import defaultdict
-from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -9,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import CurrentUser, get_db
+from app.models.cookbook import CookbookMember
 from app.models.recipe import MealPlan, Recipe, RecipeIngredient
 from app.models.shopping import ShoppingList, ShoppingListItem
 
@@ -18,6 +18,7 @@ router = APIRouter()
 class GenerateListRequest(BaseModel):
     start_date: str  # YYYY-MM-DD
     end_date: str  # YYYY-MM-DD
+    cookbook_id: int | None = None
     name: str | None = None
 
 
@@ -28,15 +29,31 @@ async def generate_shopping_list(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, int]:
     """Agrege les ingredients de toutes les recettes planifiees sur la periode."""
-    result = await db.execute(
+    if payload.cookbook_id is not None:
+        membership = await db.execute(
+            select(CookbookMember).where(
+                (CookbookMember.cookbook_id == payload.cookbook_id)
+                & (CookbookMember.user_id == current_user.id)
+            )
+        )
+        if membership.scalar_one_or_none() is None:
+            raise HTTPException(status_code=403, detail="Vous n'etes pas membre de ce cookbook")
+
+    stmt = (
         select(MealPlan, Recipe)
         .join(Recipe, Recipe.id == MealPlan.recipe_id)
         .where(
-            (MealPlan.user_id == current_user.id)
-            & (MealPlan.planned_date >= payload.start_date)
+            (MealPlan.planned_date >= payload.start_date)
             & (MealPlan.planned_date <= payload.end_date)
         )
-        .options()
+    )
+    if payload.cookbook_id is not None:
+        stmt = stmt.where(MealPlan.cookbook_id == payload.cookbook_id)
+    else:
+        stmt = stmt.where((MealPlan.user_id == current_user.id) & (MealPlan.cookbook_id.is_(None)))
+
+    result = await db.execute(
+        stmt.options()
     )
     rows = result.all()
     if not rows:

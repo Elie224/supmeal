@@ -4,7 +4,7 @@ import { addDays, format, startOfWeek } from "date-fns";
 import { fr } from "date-fns/locale";
 import { ChevronLeft, ChevronRight, ShoppingCart } from "lucide-react";
 import { api } from "../lib/api";
-import type { MealPlan, RecipeSummary } from "../lib/types";
+import type { CookbookSummary, MealPlan, RecipeSummary } from "../lib/types";
 
 const SLOTS = ["breakfast", "lunch", "dinner", "snack"] as const;
 const SLOT_LABELS: Record<string, string> = { breakfast: "Matin", lunch: "Midi", dinner: "Soir", snack: "Collation" };
@@ -12,34 +12,56 @@ const SLOT_LABELS: Record<string, string> = { breakfast: "Matin", lunch: "Midi",
 export default function MealPlanPage() {
   const qc = useQueryClient();
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
+  const [scopeCookbookId, setScopeCookbookId] = useState<number | null>(null);
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
   const startStr = format(days[0], "yyyy-MM-dd");
   const endStr = format(days[6], "yyyy-MM-dd");
 
   const plansQ = useQuery({
-    queryKey: ["plans", startStr, endStr],
-    queryFn: async () => (await api.get<MealPlan[]>("/meal-plans", { params: { start_date: startStr, end_date: endStr } })).data,
+    queryKey: ["plans", startStr, endStr, scopeCookbookId],
+    queryFn: async () => {
+      const params: Record<string, unknown> = { start_date: startStr, end_date: endStr };
+      if (scopeCookbookId) params.cookbook_id = scopeCookbookId;
+      return (await api.get<MealPlan[]>("/meal-plans", { params })).data;
+    },
+  });
+
+  const cookbooksQ = useQuery({
+    queryKey: ["cookbooks"],
+    queryFn: async () => (await api.get<CookbookSummary[]>("/cookbooks")).data,
   });
 
   const recipesQ = useQuery({
-    queryKey: ["recipes", "all"],
-    queryFn: async () => (await api.get<RecipeSummary[]>("/recipes", { params: { limit: 100 } })).data,
+    queryKey: ["recipes", "all", scopeCookbookId],
+    queryFn: async () => {
+      const params: Record<string, unknown> = { limit: 100 };
+      if (scopeCookbookId) params.cookbook_id = scopeCookbookId;
+      return (await api.get<RecipeSummary[]>("/recipes", { params })).data;
+    },
   });
 
   const add = useMutation({
-    mutationFn: async (p: { recipe_id: number; planned_date: string; meal_slot: string }) =>
+    mutationFn: async (p: { recipe_id: number; planned_date: string; meal_slot: string; cookbook_id?: number }) =>
       (await api.post("/meal-plans", p)).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["plans", startStr, endStr] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["plans", startStr, endStr, scopeCookbookId] }),
   });
 
   const remove = useMutation({
     mutationFn: async (id: number) => (await api.delete(`/meal-plans/${id}`)).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["plans", startStr, endStr] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["plans", startStr, endStr, scopeCookbookId] }),
   });
 
   const generateList = useMutation({
-    mutationFn: async () => (await api.post("/shopping/generate", { start_date: startStr, end_date: endStr, name: `Semaine du ${startStr}` })).data,
+    mutationFn: async () => {
+      const payload: { start_date: string; end_date: string; name: string; cookbook_id?: number } = {
+        start_date: startStr,
+        end_date: endStr,
+        name: `Semaine du ${startStr}`,
+      };
+      if (scopeCookbookId) payload.cookbook_id = scopeCookbookId;
+      return (await api.post("/shopping/generate", payload)).data;
+    },
   });
 
   return (
@@ -51,6 +73,18 @@ export default function MealPlanPage() {
             Semaine du {format(weekStart, "d MMMM", { locale: fr })}
           </h1>
           <button onClick={() => setWeekStart(addDays(weekStart, 7))} className="btn-outline"><ChevronRight className="w-4 h-4" /></button>
+        </div>
+        <div className="flex items-center gap-2">
+          <select
+            className="input text-sm"
+            value={scopeCookbookId ?? ""}
+            onChange={(e) => setScopeCookbookId(e.target.value ? Number(e.target.value) : null)}
+          >
+            <option value="">Planning personnel</option>
+            {cookbooksQ.data?.map((cb) => (
+              <option key={cb.id} value={cb.id}>{cb.name}</option>
+            ))}
+          </select>
         </div>
         <button
           onClick={() => generateList.mutate()}
@@ -99,7 +133,15 @@ export default function MealPlanPage() {
                           value=""
                           onChange={(e) => {
                             const v = e.target.value;
-                            if (v) add.mutate({ recipe_id: +v, planned_date: dateStr, meal_slot: slot });
+                            if (v) {
+                              const payload: { recipe_id: number; planned_date: string; meal_slot: string; cookbook_id?: number } = {
+                                recipe_id: +v,
+                                planned_date: dateStr,
+                                meal_slot: slot,
+                              };
+                              if (scopeCookbookId) payload.cookbook_id = scopeCookbookId;
+                              add.mutate(payload);
+                            }
                           }}
                         >
                           <option value="">+ Ajouter</option>

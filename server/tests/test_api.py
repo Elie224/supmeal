@@ -161,3 +161,147 @@ async def test_import_export_json(client):
     data = r.json()
     assert data["format"] == "supmeal-json"
     assert len(data["recipes"]) == 2
+
+
+@pytest.mark.asyncio
+async def test_filter_recipes_by_tag_category(client):
+    # Register
+    r = await client.post(
+        "/api/v1/auth/register",
+        json={"email": "cat@example.com", "username": "cat", "password": "Motdepasse1"},
+    )
+    token = r.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Create tags in different categories
+    t1 = await client.post(
+        "/api/v1/tags",
+        json={"name": "vegan", "category": "diet"},
+        headers=headers,
+    )
+    t2 = await client.post(
+        "/api/v1/tags",
+        json={"name": "italian", "category": "cuisine"},
+        headers=headers,
+    )
+    assert t1.status_code == 201
+    assert t2.status_code == 201
+    diet_tag_id = t1.json()["id"]
+    cuisine_tag_id = t2.json()["id"]
+
+    # Create recipes with tags
+    r1 = await client.post(
+        "/api/v1/recipes",
+        json={
+            "title": "Salade vegan",
+            "ingredients": [{"name": "salade", "position": 0}],
+            "steps": [{"content": "Melanger", "position": 0}],
+            "tag_ids": [diet_tag_id],
+        },
+        headers=headers,
+    )
+    r2 = await client.post(
+        "/api/v1/recipes",
+        json={
+            "title": "Pasta italiana",
+            "ingredients": [{"name": "pates", "position": 0}],
+            "steps": [{"content": "Cuire", "position": 0}],
+            "tag_ids": [cuisine_tag_id],
+        },
+        headers=headers,
+    )
+    assert r1.status_code == 201
+    assert r2.status_code == 201
+
+    # Filter by category
+    filtered = await client.get("/api/v1/recipes?tag_category=diet", headers=headers)
+    assert filtered.status_code == 200
+    titles = {item["title"] for item in filtered.json()}
+    assert "Salade vegan" in titles
+    assert "Pasta italiana" not in titles
+
+
+@pytest.mark.asyncio
+async def test_cookbook_collaborative_meal_plans_permissions(client):
+    # Create owner, member and outsider
+    owner = await client.post(
+        "/api/v1/auth/register",
+        json={"email": "plan-owner@example.com", "username": "plan_owner", "password": "Motdepasse1"},
+    )
+    member = await client.post(
+        "/api/v1/auth/register",
+        json={"email": "plan-member@example.com", "username": "plan_member", "password": "Motdepasse1"},
+    )
+    outsider = await client.post(
+        "/api/v1/auth/register",
+        json={"email": "plan-outsider@example.com", "username": "plan_outsider", "password": "Motdepasse1"},
+    )
+    owner_headers = {"Authorization": f"Bearer {owner.json()['access_token']}"}
+    member_headers = {"Authorization": f"Bearer {member.json()['access_token']}"}
+    outsider_headers = {"Authorization": f"Bearer {outsider.json()['access_token']}"}
+
+    # Create cookbook and invite member as commentator
+    cb = await client.post(
+        "/api/v1/cookbooks",
+        json={"name": "Planning famille", "description": "Collab"},
+        headers=owner_headers,
+    )
+    assert cb.status_code == 201
+    cb_id = cb.json()["id"]
+
+    add_member = await client.post(
+        f"/api/v1/cookbooks/{cb_id}/members",
+        json={"user_email": "plan-member@example.com", "role": "commentator"},
+        headers=owner_headers,
+    )
+    assert add_member.status_code == 201
+
+    # Create a recipe in the cookbook
+    recipe = await client.post(
+        f"/api/v1/cookbooks/{cb_id}/recipes",
+        json={
+            "title": "Gratin",
+            "ingredients": [{"name": "pommes de terre", "position": 0}],
+            "steps": [{"content": "Cuire au four", "position": 0}],
+        },
+        headers=owner_headers,
+    )
+    assert recipe.status_code == 201
+    recipe_id = recipe.json()["id"]
+
+    # Member can create collaborative plan in cookbook
+    create_plan = await client.post(
+        "/api/v1/meal-plans",
+        json={
+            "recipe_id": recipe_id,
+            "cookbook_id": cb_id,
+            "planned_date": "2026-07-10",
+            "meal_slot": "dinner",
+            "servings": 4,
+        },
+        headers=member_headers,
+    )
+    assert create_plan.status_code == 201, create_plan.text
+
+    # Outsider cannot create plan on cookbook
+    denied_create = await client.post(
+        "/api/v1/meal-plans",
+        json={
+            "recipe_id": recipe_id,
+            "cookbook_id": cb_id,
+            "planned_date": "2026-07-11",
+            "meal_slot": "lunch",
+            "servings": 4,
+        },
+        headers=outsider_headers,
+    )
+    assert denied_create.status_code == 403
+
+    # Owner can list cookbook plans
+    owner_list = await client.get(f"/api/v1/meal-plans?cookbook_id={cb_id}", headers=owner_headers)
+    assert owner_list.status_code == 200
+    assert any(p["recipe_id"] == recipe_id for p in owner_list.json())
+
+    # Outsider cannot list cookbook plans
+    outsider_list = await client.get(f"/api/v1/meal-plans?cookbook_id={cb_id}", headers=outsider_headers)
+    assert outsider_list.status_code == 403

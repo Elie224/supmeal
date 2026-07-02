@@ -34,18 +34,29 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS
+# CORS : liste blanche explicite (pas de wildcard)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept"],
+    expose_headers=["Content-Disposition"],
+    max_age=600,
 )
 
 # Fichiers statiques pour les images uploadees
 Path(settings.upload_dir).mkdir(parents=True, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=settings.upload_dir), name="uploads")
+# Fichiers statiques avec cache 7j
+from starlette.responses import Response
+from starlette.staticfiles import StaticFiles as _StaticFiles
+class CachedStaticFiles(_StaticFiles):
+    async def get_response(self, path, scope):
+        response = await super().get_response(path, scope)
+        if response.status_code == 200:
+            response.headers["Cache-Control"] = "public, max-age=604800"
+        return response
+app.mount("/uploads", CachedStaticFiles(directory=settings.upload_dir), name="uploads")
 
 # Routes API
 app.include_router(api_router, prefix="/api/v1")

@@ -8,5 +8,5 @@ export interface CookbookMember { id: number; user: { id: number; username: stri
 export interface Cookbook { id: number; name: string; description: string | null; image_url: string | null; owner_id: number; members: CookbookMember[]; created_at: string; updated_at: string; }
 export interface CookbookSummary { id: number; name: string; description: string | null; image_url: string | null; owner_id: number; member_count: number; recipe_count: number; my_role: "creator" | "editor" | "commentator" | "reader" | null; created_at: string; }
 export interface Message { id: number; author_id: number; author?: { id: number; username: string; full_name: string | null; avatar_url: string | null }; content: string; created_at: string; }
-export interface MealPlan { id: number; user_id: number; recipe_id: number; planned_date: string; meal_slot: "breakfast" | "lunch" | "dinner" | "snack"; servings: number; }
+export interface MealPlan { id: number; user_id: number; cookbook_id: number | null; recipe_id: number; planned_date: string; meal_slot: "breakfast" | "lunch" | "dinner" | "snack"; servings: number; }
 export interface Comment { id: number; recipe_id: number; author_id: number; content: string; created_at: string; }
