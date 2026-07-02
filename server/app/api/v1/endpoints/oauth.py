@@ -12,6 +12,8 @@ from starlette.config import Config
 from app.core.config import get_settings
 from app.core.deps import get_db
 from app.core.security import create_access_token
+from app.core.security_utils import is_safe_username
+from app.core.config import get_settings as _get_settings
 from app.models.user import AuthProvider, User
 from app.schemas.user import UserPublic
 
@@ -29,7 +31,7 @@ if settings.google_client_id and settings.google_client_secret:
         server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
         client_id=settings.google_client_id,
         client_secret=settings.google_client_secret,
-        client_kwargs={"scope": "openid email profile"},
+        client_kwargs={"scope": "openid email profile", "code_challenge_method": "S256"},
     )
 
 if settings.github_client_id and settings.github_client_secret:
@@ -40,7 +42,7 @@ if settings.github_client_id and settings.github_client_secret:
         authorize_url="https://github.com/login/oauth/authorize",
         client_id=settings.github_client_id,
         client_secret=settings.github_client_secret,
-        client_kwargs={"scope": "user:email"},
+        client_kwargs={"scope": "user:email", "code_challenge_method": "S256"},
     )
 
 if settings.microsoft_client_id and settings.microsoft_client_secret:
@@ -49,7 +51,7 @@ if settings.microsoft_client_id and settings.microsoft_client_secret:
         server_metadata_url="https://login.microsoftonline.com/common/v2.0/.well-known/openid-configuration",
         client_id=settings.microsoft_client_id,
         client_secret=settings.microsoft_client_secret,
-        client_kwargs={"scope": "openid email profile"},
+        client_kwargs={"scope": "openid email profile", "code_challenge_method": "S256"},
     )
 
 
@@ -162,6 +164,24 @@ async def oauth_callback(provider: str, request: Request, db: AsyncSession = Dep
     user = await _get_or_create_user(db, provider, provider_user_id, email, name)
     access_token = create_access_token(user.id)
 
-    # Rediriger vers le frontend avec le token
-    frontend_url = f"{settings.app_url}/auth/callback?token={access_token}"
-    return RedirectResponse(url=frontend_url)
+    # On NE met PAS le token dans l URL (fuite logs/referrer). A la place, on l expose
+    # via un cookie httpOnly + un echange serveur (voir /auth/exchange).
+    # En attendant un echange complet, on renvoie un code opaque a usage unique.
+    import secrets
+    import time
+    from app.api.v1.endpoints._oauth_codes import store_code  # type: ignore
+    code = secrets.token_urlsafe(32)
+    store_code(code, access_token, ttl=60)
+    frontend_url = f"{settings.app_url}/auth/callback?code={code}"
+    resp = RedirectResponse(url=frontend_url)
+    # Defense en profondeur : le code n est pas httpOnly mais il est a usage unique
+    resp.set_cookie(
+        key="supmeal_oauth_state",
+        value=secrets.token_urlsafe(16),
+        httponly=True,
+        secure=settings.app_env == "production",
+        samesite="lax",
+        max_age=60,
+        path="/",
+    )
+    return resp

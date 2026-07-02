@@ -6,6 +6,8 @@ from typing import Literal
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from pydantic import model_validator  # noqa: E402
+
 
 class Settings(BaseSettings):
     """Lit la configuration depuis les variables d'environnement ou .env."""
@@ -58,6 +60,17 @@ class Settings(BaseSettings):
     microsoft_client_id: str = ""
     microsoft_client_secret: str = ""
     microsoft_redirect_uri: str = "http://localhost:8000/api/v1/auth/oauth/microsoft/callback"
+
+    @model_validator(mode="after")
+    def _check_secrets(self):
+        if self.app_env == "production":
+            for name in ("secret_key", "jwt_secret"):
+                val = getattr(self, name, "")
+                if not val or "CHANGE-ME" in val or len(val) < 32:
+                    raise ValueError(
+                        f"{name} doit etre defini (>=32 chars) en production"
+                    )
+        return self
 
     @field_validator("backend_cors_origins")
     @classmethod

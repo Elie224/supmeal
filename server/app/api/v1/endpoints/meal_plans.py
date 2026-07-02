@@ -24,10 +24,21 @@ async def _get_member_role(
     return member.role if member else None
 
 
+_ALLOWED_MEAL_SLOTS = {"breakfast", "lunch", "dinner", "snack"}
+
+
 @router.post("", response_model=MealPlanRead, status_code=201)
 async def create_meal_plan(
     payload: MealPlanCreate, current_user: CurrentUser, db: AsyncSession = Depends(get_db)
 ) -> MealPlanRead:
+    # Validation meal_slot (whitelist)
+    if payload.meal_slot not in _ALLOWED_MEAL_SLOTS:
+        raise HTTPException(status_code=400, detail="meal_slot invalide")
+    # Validation planned_date format
+    import re
+    if not re.match(r"^\d{4}-\d{2}-\d{2}$", payload.planned_date or ""):
+        raise HTTPException(status_code=400, detail="planned_date doit etre YYYY-MM-DD")
+
     result = await db.execute(select(Recipe).where(Recipe.id == payload.recipe_id))
     recipe = result.scalar_one_or_none()
     if not recipe:

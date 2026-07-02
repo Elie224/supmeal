@@ -21,6 +21,7 @@ from app.models.recipe import (
     Tag,
 )
 from app.schemas.recipe import RecipeRead
+from app.core.security_utils import sanitize_csv_cell
 from app.services.import_export import mealie_to_recipe, recipe_to_dict
 
 router = APIRouter()
@@ -74,6 +75,9 @@ async def export_json(current_user: CurrentUser, db: AsyncSession = Depends(get_
 @router.get("/csv")
 async def export_csv(current_user: CurrentUser, db: AsyncSession = Depends(get_db)) -> StreamingResponse:
     """Exporte les recettes en CSV (1 ligne par ingredient)."""
+    member_cb_subq = select(CookbookMember.cookbook_id).where(
+        CookbookMember.user_id == current_user.id
+    )
     recipes_result = await db.execute(
         select(Recipe)
         .options(
@@ -97,24 +101,33 @@ async def export_csv(current_user: CurrentUser, db: AsyncSession = Depends(get_d
         tags_str = ",".join(t.name for t in r.tags)
         for ing in r.ingredients:
             row = [
-                r.title,
-                r.description or "",
+                sanitize_csv_cell(r.title),
+                sanitize_csv_cell(r.description or ""),
                 r.servings,
                 r.prep_time_minutes,
                 r.cook_time_minutes,
-                ing.name,
+                sanitize_csv_cell(ing.name),
                 ing.quantity or "",
-                ing.unit or "",
+                sanitize_csv_cell(ing.unit or ""),
                 "",
-                tags_str,
-                r.source_url or "",
+                sanitize_csv_cell(tags_str),
+                sanitize_csv_cell(r.source_url or ""),
             ]
             writer.writerow(row)
         # Une ligne par etape pour les etapes
         for pos in range(1, max_step + 1):
             writer.writerow([
-                r.title, r.description or "", r.servings, r.prep_time_minutes,
-                r.cook_time_minutes, "", "", "", steps_dict.get(pos, ""), tags_str, r.source_url or "",
+                sanitize_csv_cell(r.title),
+                sanitize_csv_cell(r.description or ""),
+                r.servings,
+                r.prep_time_minutes,
+                r.cook_time_minutes,
+                "",
+                "",
+                "",
+                sanitize_csv_cell(steps_dict.get(pos, "")),
+                sanitize_csv_cell(tags_str),
+                sanitize_csv_cell(r.source_url or ""),
             ])
 
     buffer.seek(0)
@@ -134,7 +147,11 @@ async def import_json(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, int]:
     """Importe un JSON SUPMEAL ou compatible Mealie."""
-    content = await file.read()
+    # Anti-DoS : limite a 5 MB pour l import JSON
+    MAX_IMPORT_SIZE = 5 * 1024 * 1024
+    content = await file.read(MAX_IMPORT_SIZE + 1)
+    if len(content) > MAX_IMPORT_SIZE:
+        raise HTTPException(status_code=413, detail="Fichier d import trop volumineux (max 5 MB)")
     try:
         data = json.loads(content)
     except json.JSONDecodeError as e:
@@ -177,11 +194,15 @@ async def import_csv(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, int]:
     """Importe un CSV. Le regroupement par titre est automatique."""
-    content = (await file.read()).decode("utf-8", errors="ignore")
+    MAX_IMPORT_SIZE = 5 * 1024 * 1024
+    raw = await file.read(MAX_IMPORT_SIZE + 1)
+    if len(raw) > MAX_IMPORT_SIZE:
+        raise HTTPException(status_code=413, detail="Fichier d import trop volumineux (max 5 MB)")
+    content = raw.decode("utf-8", errors="ignore")
     reader = csv.DictReader(io.StringIO(content))
     by_title: dict[str, dict[str, Any]] = {}
     for row in reader:
-        title = (row.get("title") or "").strip()
+        title = sanitize_csv_cell((row.get("title") or "").strip())
         if not title:
             continue
         if title not in by_title:

@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.config import get_settings
+from app.core.security_utils import safe_image_extension, sniff_image
 from app.core.deps import CurrentUser, get_db, _get_optional_user
 from app.models.cookbook import CookbookMember, CookbookRole
 from app.models.user import User
@@ -214,8 +215,8 @@ async def list_recipes(
     max_cook_time: int | None = None,
     favorites_only: bool = False,
     search: str | None = None,
-    skip: int = 0,
-    limit: int = 20,
+    skip: int = Query(0, ge=0, le=10000),
+    limit: int = Query(20, ge=1, le=100),
 ) -> list[RecipeSummary]:
     """Liste paginee + filtres + recherche plein texte (PostgreSQL FTS)."""
     stmt = select(Recipe).options(selectinload(Recipe.tags))
@@ -223,7 +224,8 @@ async def list_recipes(
     conditions = []
 
     # Visibilite : recettes personnelles, publiques, ou dans un cookbook dont je suis membre
-    visibility_clauses = [Recipe.is_public.is_(True)]
+    # is_public uniquement si owner present (anti recette orpheline)
+    visibility_clauses = [and_(Recipe.is_public.is_(True), Recipe.owner_id.is_not(None))]
     if current_user:
         visibility_clauses.append(Recipe.owner_id == current_user.id)
         # cookbooks dont je suis membre
@@ -431,9 +433,14 @@ async def upload_recipe_image(
     if len(content) > settings.max_upload_size_mb * 1024 * 1024:
         raise HTTPException(status_code=400, detail="Fichier trop volumineux")
 
-    ext = os.path.splitext(file.filename or "")[1].lower()
-    if ext not in ALLOWED_IMAGE_EXT:
-        ext = ".jpg"
+    # Validation par magic bytes (defense en profondeur contre SVG, PHP, scripts)
+    sniffed = sniff_image(content)
+    if sniffed is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Contenu invalide: seuls JPEG, PNG, GIF, WebP sont acceptes",
+        )
+    ext = safe_image_extension(os.path.splitext(file.filename or "")[1], sniffed)
 
     upload_dir = Path(settings.upload_dir)
     upload_dir.mkdir(parents=True, exist_ok=True)

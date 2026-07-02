@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.deps import CurrentUser, get_db
 from app.core.security import hash_password, verify_password
+from app.core.security_utils import safe_image_extension, sniff_image
 from app.models.user import User
 from app.schemas.user import PasswordChange, UserPublic, UserRead, UserUpdate
 
@@ -23,14 +24,26 @@ ALLOWED_IMAGE_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 
 
 @router.get("", response_model=list[UserPublic])
-async def list_users(db: AsyncSession = Depends(get_db)) -> list[UserPublic]:
-    """Liste minimale des utilisateurs (pour inviter dans un cookbook)."""
-    result = await db.execute(select(User).order_by(User.username).limit(200))
+async def list_users(
+    db: AsyncSession = Depends(get_db),
+    _: CurrentUser = ...,
+    q: str | None = None,
+) -> list[UserPublic]:
+    """Liste minimale des utilisateurs (pour inviter dans un cookbook). Auth requise."""
+    stmt = select(User).order_by(User.username).limit(200)
+    if q:
+        like = f"%{q[:60]}%"
+        stmt = stmt.where((User.username.ilike(like)) | (User.email.ilike(like)))
+    result = await db.execute(stmt)
     return [UserPublic.model_validate(u) for u in result.scalars().all()]
 
 
 @router.get("/{user_id}", response_model=UserPublic)
-async def get_user(user_id: int, db: AsyncSession = Depends(get_db)) -> UserPublic:
+async def get_user(
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: CurrentUser = ...,
+) -> UserPublic:
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if not user:
@@ -78,9 +91,14 @@ async def upload_avatar(
     if len(content) > max_bytes:
         raise HTTPException(status_code=400, detail="Fichier trop volumineux")
 
-    ext = os.path.splitext(file.filename or "")[1].lower()
-    if ext not in ALLOWED_IMAGE_EXT:
-        ext = ".jpg"
+    # Validation par magic bytes (defense contre svg, php, html, scripts)
+    sniffed = sniff_image(content)
+    if sniffed is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Contenu invalide: seuls JPEG, PNG, GIF, WebP sont acceptes",
+        )
+    ext = safe_image_extension(os.path.splitext(file.filename or "")[1], sniffed)
 
     upload_dir = Path(settings.upload_dir)
     upload_dir.mkdir(parents=True, exist_ok=True)
