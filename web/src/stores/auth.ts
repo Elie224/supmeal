@@ -8,6 +8,7 @@ export interface AuthUser {
   username: string;
   full_name: string | null;
   avatar_url: string | null;
+  role?: "user" | "admin";
 }
 
 interface AuthState {
@@ -26,8 +27,11 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       user: null,
       setUser: (user) => {
-        localStorage.setItem("supmeal_user", JSON.stringify(user));
-        set({ isAuthenticated: true, user });
+        // preserve previous role if not provided
+        const prev = useAuthStore.getState().user;
+        const merged = prev?.role && !user.role ? { ...user, role: prev.role } : user;
+        localStorage.setItem("supmeal_user", JSON.stringify(merged));
+        set({ isAuthenticated: true, user: merged });
       },
       clear: () => {
         localStorage.removeItem("supmeal_user");
@@ -47,6 +51,7 @@ export const useAuthStore = create<AuthState>()(
               username: data.username,
               full_name: data.full_name,
               avatar_url: data.avatar_url,
+              role: data.role,
             },
           });
           localStorage.setItem("supmeal_user", JSON.stringify(data));

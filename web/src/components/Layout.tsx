@@ -1,5 +1,5 @@
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
-import { ChefHat, Home, BookOpen, Calendar, Settings, LogOut, Plus } from "lucide-react";
+import { ChefHat, Home, BookOpen, Calendar, Settings, LogOut, Plus, ShieldCheck } from "lucide-react";
 import { useAuthStore } from "../stores/auth";
 import { cn } from "../lib/utils";
 
@@ -48,6 +48,22 @@ export default function Layout() {
               {item.label}
             </NavLink>
           ))}
+          {user?.role === "admin" && (
+            <NavLink
+              to="/admin"
+              className={({ isActive }) =>
+                cn(
+                  "flex items-center gap-3 px-3 py-2 rounded text-sm font-medium transition-colors",
+                  isActive
+                    ? "bg-tomato-100 text-tomato-700"
+                    : "text-tomato-700 hover:bg-tomato-50"
+                )
+              }
+            >
+              <ShieldCheck className="w-4 h-4" />
+              Administration
+            </NavLink>
+          )}
         </nav>
         <div className="border-t border-cream-200 p-3 space-y-2">
           <div className="px-2 py-2">

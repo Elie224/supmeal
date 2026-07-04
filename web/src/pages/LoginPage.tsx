@@ -6,7 +6,7 @@ import { useAuthStore } from "../stores/auth";
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const setAuth = useAuthStore((s) => s.setAuth);
+  const setUser = useAuthStore((s) => s.setUser);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -18,7 +18,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const { data } = await api.post("/auth/login", { email, password });
-      setAuth(data.access_token, {
+      setUser({
         id: data.user.id,
         email: data.user.email,
         username: data.user.username,

@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
+    admin,
     auth,
     cookbooks,
     import_export,
@@ -24,3 +25,4 @@ api_router.include_router(meal_plans.router, prefix="/meal-plans", tags=["meal-p
 api_router.include_router(tags.router, prefix="/tags", tags=["tags"])
 api_router.include_router(shopping.router, prefix="/shopping", tags=["shopping"])
 api_router.include_router(import_export.router, prefix="/import-export", tags=["import-export"])
+api_router.include_router(admin.router, prefix="/admin", tags=["admin"])

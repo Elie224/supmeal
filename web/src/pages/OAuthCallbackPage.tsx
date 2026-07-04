@@ -6,7 +6,7 @@ import { api } from "../lib/api";
 export default function OAuthCallbackPage() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
-  const setAuth = useAuthStore((s) => s.setAuth);
+  const setUser = useAuthStore((s) => s.setUser);
   const handled = useRef(false);
 
   useEffect(() => {
@@ -25,7 +25,7 @@ export default function OAuthCallbackPage() {
           const token = res.data.access_token;
           const user = res.data.user;
           localStorage.setItem("supmeal_token", token);
-          setAuth(token, {
+          setUser({
             id: user.id,
             email: user.email,
             username: user.username,
@@ -44,7 +44,7 @@ export default function OAuthCallbackPage() {
       api
         .get("/auth/me")
         .then(({ data }) => {
-          setAuth(legacyToken, {
+          setUser({
             id: data.id,
             email: data.email,
             username: data.username,
@@ -58,7 +58,7 @@ export default function OAuthCallbackPage() {
     }
 
     navigate("/login", { replace: true });
-  }, [params, navigate, setAuth]);
+  }, [params, navigate, setUser]);
 
   return (
     <div className="min-h-screen flex items-center justify-center">

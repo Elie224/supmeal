@@ -6,7 +6,7 @@ import { useAuthStore } from "../stores/auth";
 
 export default function RegisterPage() {
   const navigate = useNavigate();
-  const setAuth = useAuthStore((s) => s.setAuth);
+  const setUser = useAuthStore((s) => s.setUser);
   const [form, setForm] = useState({
     email: "",
     username: "",
@@ -22,7 +22,7 @@ export default function RegisterPage() {
     setLoading(true);
     try {
       const { data } = await api.post("/auth/register", form);
-      setAuth(data.access_token, {
+      setUser({
         id: data.user.id,
         email: data.user.email,
         username: data.user.username,

@@ -11,11 +11,12 @@ import CookbookPage from "./pages/CookbookPage";
 import MealPlanPage from "./pages/MealPlanPage";
 import SettingsPage from "./pages/SettingsPage";
 import OAuthCallbackPage from "./pages/OAuthCallbackPage";
+import AdminPage from "./pages/AdminPage";
 import { type ReactElement } from "react";
 
 function PrivateRoute({ children }: { children: ReactElement }) {
-  const token = useAuthStore((s) => s.token);
-  if (!token) return <Navigate to="/login" replace />;
+  const isAuth = useAuthStore((s) => s.isAuthenticated);
+  if (!isAuth) return <Navigate to="/login" replace />;
   return children;
 }
 
@@ -41,6 +42,7 @@ export default function App() {
         <Route path="cookbooks/:id" element={<CookbookPage />} />
         <Route path="planning" element={<MealPlanPage />} />
         <Route path="settings" element={<SettingsPage />} />
+        <Route path="admin" element={<AdminPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

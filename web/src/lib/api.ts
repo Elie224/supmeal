@@ -2,10 +2,14 @@ import axios, { AxiosError, InternalAxiosRequestConfig } from "axios";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api/v1";
 
-function getCookie(name: string): string | null {
+export function getCookie(name: string): string | null {
   if (typeof document === "undefined") return null;
   const m = document.cookie.match(new RegExp("(?:^|; )" + name.replace(/([.$?*|{}()\[\]\\\/\+^])/g, "\\$1") + "=([^;]*)"));
   return m ? decodeURIComponent(m[1]) : null;
+}
+
+export function getCsrfToken(): string | null {
+  return getCookie("supmeal_csrf");
 }
 
 export const api = axios.create({
