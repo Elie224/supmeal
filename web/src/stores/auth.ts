@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { api } from "../lib/api";
 
 export interface AuthUser {
   id: number;
@@ -10,28 +11,53 @@ export interface AuthUser {
 }
 
 interface AuthState {
-  token: string | null;
+  // Le token JWT est maintenant en cookie httpOnly (defense XSS).
+  // On garde un flag isAuthenticated + le user dans le store.
+  isAuthenticated: boolean;
   user: AuthUser | null;
-  setAuth: (token: string, user: AuthUser) => void;
+  setUser: (user: AuthUser) => void;
   clear: () => void;
+  hydrate: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
-      token: null,
+      isAuthenticated: false,
       user: null,
-      setAuth: (token, user) => {
-        localStorage.setItem("supmeal_token", token);
+      setUser: (user) => {
         localStorage.setItem("supmeal_user", JSON.stringify(user));
-        set({ token, user });
+        set({ isAuthenticated: true, user });
       },
       clear: () => {
-        localStorage.removeItem("supmeal_token");
         localStorage.removeItem("supmeal_user");
-        set({ token: null, user: null });
+        localStorage.removeItem("supmeal_token");
+        set({ isAuthenticated: false, user: null });
+      },
+      hydrate: async () => {
+        // Au demarrage, on verifie si on a un cookie valide via /auth/me.
+        // Si oui, on recupere le user. Sinon, on clear.
+        try {
+          const { data } = await api.get("/auth/me");
+          set({
+            isAuthenticated: true,
+            user: {
+              id: data.id,
+              email: data.email,
+              username: data.username,
+              full_name: data.full_name,
+              avatar_url: data.avatar_url,
+            },
+          });
+          localStorage.setItem("supmeal_user", JSON.stringify(data));
+        } catch {
+          set({ isAuthenticated: false, user: null });
+        }
       },
     }),
-    { name: "supmeal-auth" }
+    {
+      name: "supmeal-auth",
+      partialize: (s) => ({ user: s.user, isAuthenticated: s.isAuthenticated }),
+    }
   )
 );

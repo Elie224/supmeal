@@ -15,7 +15,7 @@ class ConnectionManager:
         self._lock = asyncio.Lock()
 
     async def connect(self, cookbook_id: int, websocket: WebSocket) -> None:
-        await websocket.accept()
+        # L appelant doit deja avoir fait accept()
         async with self._lock:
             self._connections[cookbook_id].add(websocket)
 

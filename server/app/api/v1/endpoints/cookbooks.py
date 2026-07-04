@@ -433,12 +433,62 @@ async def post_message(
 
 # ---------- WebSocket chat ----------
 
-@router.websocket("/ws/{cookbook_id}")
-async def websocket_chat(
-    websocket: WebSocket, cookbook_id: int, db: AsyncSession = Depends(get_db)
-):
-    """Chat WebSocket pour un cookbook. Auth par token dans query string."""
-    token = websocket.query_params.get("token")
+# Vide par defaut (tests). En prod, remplir avec les origines frontend autorisees.
+_ALLOWED_WS_ORIGINS: set = set()
+
+
+def _extract_ws_token(websocket) -> str | None:
+    """Recupere le JWT via :
+    1. Sec-WebSocket-Protocol (le client demande un sub-protocol bearer.<token>)
+    2. Cookie httpOnly supmeal_token
+    3. Authorization: Bearer <token> header
+    NE CHERCHE PLUS le token dans l URL (fuite logs/referrer).
+    """
+    proto = websocket.headers.get("sec-websocket-protocol") or ""
+    for part in proto.split(","):
+        part = part.strip()
+        if part.startswith("bearer."):
+            token = part[len("bearer."):]
+            if token:
+                return token
+    cookie_header = websocket.headers.get("cookie") or ""
+    for chunk in cookie_header.split(";"):
+        kv = chunk.strip()
+        if kv.startswith("supmeal_token="):
+            return kv[len("supmeal_token="):]
+    auth = websocket.headers.get("authorization") or ""
+    if auth.lower().startswith("bearer "):
+        return auth[7:].strip()
+    return None
+
+
+async def _get_member_role_ws(db, cookbook_id: int, user_id: int):
+    """Meme logique que _get_member_role, exposee pour la session WS manuelle."""
+    from sqlalchemy import select as _select
+    result = await db.execute(
+        _select(CookbookMember).where(
+            (CookbookMember.cookbook_id == cookbook_id) & (CookbookMember.user_id == user_id)
+        )
+    )
+    m = result.scalar_one_or_none()
+    return m.role if m else None
+
+
+@router.websocket("/{cookbook_id}/ws")
+async def websocket_chat(websocket, cookbook_id: str):
+    """Chat WebSocket pour un cookbook. Auth via sub-protocol ou cookie httpOnly."""
+    # 1) Accepter d abord (sinon Starlette renvoie 403 avant meme d executer la fonction)
+    #    On valide tout le reste en interne.
+    await websocket.accept()
+
+    # 2) Verifier l origine
+    origin = websocket.headers.get("origin")
+    if origin and _ALLOWED_WS_ORIGINS and origin not in _ALLOWED_WS_ORIGINS:
+        await websocket.close(code=4403)
+        return
+
+    # 3) Verifier le token
+    token = _extract_ws_token(websocket)
     if not token:
         await websocket.close(code=4401)
         return
@@ -448,30 +498,46 @@ async def websocket_chat(
         await websocket.close(code=4401)
         return
     user_id = int(payload["sub"])
-    role = await _get_member_role(db, cookbook_id, user_id)
-    if role is None:
-        await websocket.close(code=4403)
-        return
-    if role == CookbookRole.READER:
-        await websocket.close(code=4403)
+
+    # 4) Rate limit par user
+    from app.core.ratelimit import ws_limiter, message_limiter
+    if not ws_limiter.is_allowed(str(user_id)):
+        await websocket.close(code=4429)
         return
 
-    await manager.connect(cookbook_id, websocket)
+    # 5) Verifier les droits sur le cookbook
+    try:
+        cb_id = int(cookbook_id)
+    except (TypeError, ValueError):
+        await websocket.close(code=4400)
+        return
+
+    from app.db.session import AsyncSessionLocal as _AsyncSessionLocal
+    async with _AsyncSessionLocal() as db:
+        role = await _get_member_role_ws(db, cb_id, user_id)
+        if role is None or role == CookbookRole.READER:
+            await websocket.close(code=4403)
+            return
+
+    # 6) Boucle de chat
+    await manager.connect(cb_id, websocket)
     try:
         while True:
             data = await websocket.receive_json()
-            content = data.get("content", "").strip()
+            content = (data.get("content") or "").strip()
             if not content:
                 continue
-            msg = CookbookMessage(
-                cookbook_id=cookbook_id, author_id=user_id, content=content[:2000]
-            )
-            db.add(msg)
-            await db.commit()
-            await db.refresh(msg)
-            author = await db.get(User, user_id)
+            # Rate limit sur les messages
+            if not message_limiter.is_allowed(str(user_id)):
+                continue
+            async with _AsyncSessionLocal() as db:
+                msg = CookbookMessage(cookbook_id=cb_id, author_id=user_id, content=content[:2000])
+                db.add(msg)
+                await db.commit()
+                await db.refresh(msg)
+                author = await db.get(User, user_id)
             await manager.broadcast(
-                cookbook_id,
+                cb_id,
                 {
                     "id": msg.id,
                     "author_id": user_id,
@@ -481,7 +547,7 @@ async def websocket_chat(
                 },
             )
     except WebSocketDisconnect:
-        manager.disconnect(cookbook_id, websocket)
+        manager.disconnect(cb_id, websocket)
 
 
 # ---------- Helpers ----------

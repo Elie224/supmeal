@@ -4,6 +4,7 @@ import path from "node:path";
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
+  const target = env.VITE_API_URL || "http://localhost:8765";
   return {
     plugins: [react()],
     resolve: {
@@ -16,12 +17,15 @@ export default defineConfig(({ mode }) => {
       port: 5173,
       proxy: {
         "/api": {
-          target: env.VITE_API_URL || "http://localhost:8000",
+          target,
           changeOrigin: true,
+          ws: true,
+          secure: false,
         },
         "/uploads": {
-          target: env.VITE_API_URL || "http://localhost:8000",
+          target,
           changeOrigin: true,
+          secure: false,
         },
       },
     },

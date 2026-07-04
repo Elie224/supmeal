@@ -10,6 +10,7 @@ from starlette.staticfiles import StaticFiles as _StaticFiles
 
 from app.api.v1.router import api_router
 from app.core.config import get_settings
+from app.core.csrf import CSRFMiddleware
 from app.db.session import engine
 
 settings = get_settings()
@@ -31,6 +32,10 @@ app = FastAPI(
     openapi_url="/openapi.json",
     lifespan=lifespan,
 )
+
+
+# ---------- CSRF (double-submit cookie) ----------
+app.add_middleware(CSRFMiddleware)
 
 
 # ---------- Middleware headers de securite ----------
@@ -129,6 +134,79 @@ class CachedStaticFiles(_StaticFiles):
 
 
 app.mount("/uploads", CachedStaticFiles(directory=settings.upload_dir), name="uploads")
+
+
+
+# ---------- WebSocket (declare au niveau app pour eviter le bug FastAPI 0.115+ sur les WS routes) ----------
+import sys as _sys
+from starlette.websockets import WebSocket as _WebSocket
+from starlette.websockets import WebSocketDisconnect as _WebSocketDisconnect
+from app.api.v1.endpoints.cookbooks import _extract_ws_token, _get_member_role_ws, _ALLOWED_WS_ORIGINS
+from app.services.connection_manager import manager as _manager
+from app.db.session import AsyncSessionLocal as _AsyncSessionLocal2
+from app.models.cookbook import CookbookMessage, CookbookRole as _CookbookRole
+from app.models.user import User as _User2
+from app.schemas.user import UserPublic as _UserPublic2
+from app.core.security import decode_access_token as _decode
+from app.core.ratelimit import ws_limiter as _ws_limiter, message_limiter as _msg_limiter
+
+
+@app.websocket("/api/v1/cookbooks/{cookbook_id}/ws")
+async def app_websocket_chat(websocket: _WebSocket, cookbook_id: str):
+    await websocket.accept()
+    origin = websocket.headers.get("origin")
+    if origin and _ALLOWED_WS_ORIGINS and origin not in _ALLOWED_WS_ORIGINS:
+        await websocket.close(code=4403)
+        return
+    token = _extract_ws_token(websocket)
+    if not token:
+        await websocket.close(code=4401)
+        return
+    payload = _decode(token)
+    if not payload or "sub" not in payload:
+        await websocket.close(code=4401)
+        return
+    user_id = int(payload["sub"])
+    if not _ws_limiter.is_allowed(str(user_id)):
+        await websocket.close(code=4429)
+        return
+    try:
+        cb_id = int(cookbook_id)
+    except (TypeError, ValueError):
+        await websocket.close(code=4400)
+        return
+    async with _AsyncSessionLocal2() as db:
+        role = await _get_member_role_ws(db, cb_id, user_id)
+        if role is None or role == _CookbookRole.READER:
+            await websocket.close(code=4403)
+            return
+    await _manager.connect(cb_id, websocket)
+    try:
+        while True:
+            data = await websocket.receive_json()
+            content = (data.get("content") or "").strip()
+            if not content:
+                continue
+            if not _msg_limiter.is_allowed(str(user_id)):
+                continue
+            async with _AsyncSessionLocal2() as db:
+                msg = CookbookMessage(cookbook_id=cb_id, author_id=user_id, content=content[:2000])
+                db.add(msg)
+                await db.commit()
+                await db.refresh(msg)
+                author = await db.get(_User2, user_id)
+            await _manager.broadcast(
+                cb_id,
+                {
+                    "id": msg.id,
+                    "author_id": user_id,
+                    "author": _UserPublic2.model_validate(author).model_dump(),
+                    "content": msg.content,
+                    "created_at": msg.created_at.isoformat(),
+                },
+            )
+    except _WebSocketDisconnect:
+        _manager.disconnect(cb_id, websocket)
 
 app.include_router(api_router, prefix="/api/v1")
 

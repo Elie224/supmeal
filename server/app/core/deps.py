@@ -3,7 +3,7 @@
 from collections.abc import AsyncGenerator
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,13 +12,30 @@ from app.core.security import decode_access_token
 from app.db.session import get_db
 from app.models.user import User
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)  # noqa: F841 (Swagger)
+
+
+def _extract_bearer(request: Request) -> str | None:
+    """Recupere le token depuis :
+    1. Authorization: Bearer (header)
+    2. Cookie supmeal_token (httpOnly, envoye par le navigateur)
+    """
+    auth = request.headers.get("authorization") or ""
+    if auth.lower().startswith("bearer "):
+        return auth[7:].strip()
+    cookie_header = request.headers.get("cookie") or ""
+    for chunk in cookie_header.split(";"):
+        kv = chunk.strip()
+        if kv.startswith("supmeal_token="):
+            return kv[len("supmeal_token="):]
+    return None
 
 
 async def get_current_user(
-    token: Annotated[str | None, Depends(oauth2_scheme)],
+    request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> User:
+    token = _extract_bearer(request)
     credentials_exc = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Identifiants invalides",
@@ -29,7 +46,6 @@ async def get_current_user(
     payload = decode_access_token(token)
     if not payload or "sub" not in payload:
         raise credentials_exc
-
     user_id = int(payload["sub"])
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
@@ -39,10 +55,11 @@ async def get_current_user(
 
 
 async def get_optional_user(
-    token: Annotated[str | None, Depends(oauth2_scheme)],
+    request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> User | None:
     """Comme get_current_user, mais renvoie None si pas de token (au lieu de 401)."""
+    token = _extract_bearer(request)
     if not token:
         return None
     payload = decode_access_token(token)

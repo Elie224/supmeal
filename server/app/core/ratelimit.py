@@ -45,3 +45,6 @@ import_limiter = IPRateLimit(max_requests=10, window_seconds=60)
 upload_limiter = IPRateLimit(max_requests=30, window_seconds=60)
 auth_heavy_limiter = IPRateLimit(max_requests=5, window_seconds=300)
 
+ws_limiter = IPRateLimit(max_requests=20, window_seconds=60)
+message_limiter = InMemoryRateLimiter(max_requests=10, window_seconds=10)
+

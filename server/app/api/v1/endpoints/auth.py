@@ -1,6 +1,7 @@
 """Endpoints d'authentification locale."""
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
+import secrets
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,6 +10,7 @@ from app.core.config import get_settings as _auth_settings
 from app.core.ratelimit import login_limiter, register_limiter
 from fastapi import Request
 from app.core.security import create_access_token, hash_password, verify_password
+from app.core.pwned import is_pwned
 from app.models.user import AuthProvider, User
 from app.schemas.user import LoginRequest, TokenResponse, UserCreate, UserRead
 
@@ -26,6 +28,12 @@ async def register(payload: UserCreate, request: Request, db: AsyncSession = Dep
         raise HTTPException(
             status_code=422,
             detail="Le mot de passe doit contenir au moins une minuscule, une majuscule et un chiffre.",
+        )
+    # Verifier qu il n apparait pas dans des fuites connues (HIBP k-anonymity)
+    if is_pwned(pwd):
+        raise HTTPException(
+            status_code=422,
+            detail="Ce mot de passe est apparu dans des fuites de donnees publiques. Veuillez en choisir un autre.",
         )
     # Verifier unicite email et username
     existing = await db.execute(
@@ -54,7 +62,12 @@ async def register(payload: UserCreate, request: Request, db: AsyncSession = Dep
     await db.refresh(user)
 
     token = create_access_token(user.id)
-    return TokenResponse(access_token=token, user=UserRead.model_validate(user))
+    settings = _auth_settings()
+    body = TokenResponse(access_token=token, user=UserRead.model_validate(user)).model_dump(mode="json")
+    from fastapi.responses import JSONResponse
+    resp = JSONResponse(content=body)
+    _set_auth_cookies(resp, token, settings)
+    return resp
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -73,7 +86,12 @@ async def login(payload: LoginRequest, request: Request, db: AsyncSession = Depe
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Compte desactive")
 
     token = create_access_token(user.id)
-    return TokenResponse(access_token=token, user=UserRead.model_validate(user))
+    settings = _auth_settings()
+    body = TokenResponse(access_token=token, user=UserRead.model_validate(user)).model_dump(mode="json")
+    from fastapi.responses import JSONResponse
+    resp = JSONResponse(content=body)
+    _set_auth_cookies(resp, token, settings)
+    return resp
 
 
 @router.get("/me", response_model=UserRead)
@@ -103,5 +121,67 @@ async def exchange_oauth_code(payload: dict, db: AsyncSession = Depends(get_db))
     user = result.scalar_one_or_none()
     if not user or not user.is_active:
         raise HTTPException(status_code=401, detail="Utilisateur invalide")
-    return TokenResponse(access_token=token, user=_UserRead.model_validate(user))
+    settings = _auth_settings()
+    body = TokenResponse(access_token=token, user=_UserRead.model_validate(user)).model_dump(mode="json")
+    from fastapi.responses import JSONResponse
+    resp = JSONResponse(content=body)
+    _set_auth_cookies(resp, token, settings)
+    return resp
+
+
+def _set_auth_cookies(response: Response, token: str, settings) -> None:
+    """Pose le JWT en cookie httpOnly + un token CSRF (double-submit pattern)."""
+    is_prod = settings.app_env == "production"
+    # Le token : httpOnly, secure en prod, SameSite=Lax (suffit pour une SPA, pas de cross-site form post)
+    response.set_cookie(
+        key="supmeal_token",
+        value=token,
+        httponly=True,
+        secure=is_prod,
+        samesite="lax",
+        max_age=settings.access_token_expire_minutes * 60,
+        path="/",
+    )
+    # Le CSRF : lisible par le JS (pour qu il puisse l envoyer en header X-CSRF-Token)
+    response.set_cookie(
+        key="supmeal_csrf",
+        value=secrets.token_urlsafe(32),
+        httponly=False,
+        secure=is_prod,
+        samesite="lax",
+        max_age=settings.access_token_expire_minutes * 60,
+        path="/",
+    )
+
+
+def _clear_auth_cookies(response: Response) -> None:
+    response.delete_cookie("supmeal_token", path="/")
+    response.delete_cookie("supmeal_csrf", path="/")
+
+
+@router.post("/logout", status_code=204)
+async def logout(response: Response) -> Response:
+    """Supprime les cookies d authentification."""
+    _clear_auth_cookies(response)
+    response.status_code = 204
+    return response
+
+
+@router.get("/csrf")
+async def csrf_token(response: Response) -> dict:
+    """Renvoie un token CSRF (double-submit cookie pattern).
+    Le serveur pose un cookie lisible par le JS, le front l envoie en header X-CSRF-Token."""
+    settings = _auth_settings()
+    is_prod = settings.app_env == "production"
+    token = secrets.token_urlsafe(32)
+    response.set_cookie(
+        key="supmeal_csrf",
+        value=token,
+        httponly=False,
+        secure=is_prod,
+        samesite="lax",
+        max_age=settings.access_token_expire_minutes * 60,
+        path="/",
+    )
+    return {"csrf_token": token}
 
