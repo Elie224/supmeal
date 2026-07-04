@@ -54,7 +54,9 @@ export default function SettingsPage() {
     mutationFn: async (file: File) => {
       const fd = new FormData();
       fd.append("file", file);
-      return (await api.post("/users/me/avatar", fd, { headers: { "Content-Type": "multipart/form-data" } })).data;
+      // Pas de Content-Type ici : axios ajoute automatiquement multipart/form-data avec boundary.
+      // L interceptor ajoute X-CSRF-Token depuis le cookie.
+      return (await api.post("/users/me/avatar", fd)).data;
     },
     onSuccess: () => {
       setMsg("Avatar mis a jour.");
@@ -81,7 +83,8 @@ export default function SettingsPage() {
   const handleImport = async (file: File, format: "json" | "csv") => {
     const fd = new FormData();
     fd.append("file", file);
-    const { data } = await api.post(`/import-export/${format}`, fd, { headers: { "Content-Type": "multipart/form-data" } });
+    // Pas de Content-Type explicite : boundary gere par axios + CSRF via interceptor.
+    const { data } = await api.post(`/import-export/${format}`, fd);
     setMsg(`Importation : ${data.imported_recipes} recette(s) importee(s).`);
   };
 
