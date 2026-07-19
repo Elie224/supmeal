@@ -72,21 +72,21 @@ _DEV_DOCS_ORIGINS = {"http://localhost:5173", "http://127.0.0.1:5173"}
 def _build_csp(request_origin):
     """Construit la politique CSP. Swagger UI necessite quelques assouplissements."""
     directives = [
-        "default-src ''self''",
-        "img-src ''self'' data: blob:",
-        "connect-src ''self'' ws: wss:",
-        "font-src ''self'' data:",
-        "frame-ancestors ''none''",
-        "base-uri ''self''",
-        "form-action ''self''",
-        "object-src ''none''",
+        "default-src 'self'",
+        "img-src 'self' data: blob:",
+        "connect-src 'self' ws: wss:",
+        "font-src 'self' data:",
+        "frame-ancestors 'none'",
+        "base-uri 'self'",
+        "form-action 'self'",
+        "object-src 'none'",
     ]
     if request_origin in _DEV_DOCS_ORIGINS or request_origin in settings.cors_origins_list:
-        directives.insert(1, "script-src ''self'' ''unsafe-inline'' ''unsafe-eval''")
-        directives.insert(2, "style-src ''self'' ''unsafe-inline''")
+        directives.insert(1, "script-src 'self' 'unsafe-inline' 'unsafe-eval'")
+        directives.insert(2, "style-src 'self' 'unsafe-inline'")
     else:
-        directives.insert(1, "script-src ''self''")
-        directives.insert(2, "style-src ''self''")
+        directives.insert(1, "script-src 'self'")
+        directives.insert(2, "style-src 'self'")
     return "; ".join(directives)
 
 
@@ -148,7 +148,7 @@ class CachedStaticFiles(_StaticFiles):
         response = await super().get_response(path, scope)
         if response.status_code == 200:
             response.headers["Cache-Control"] = "public, max-age=604800"
-            response.headers["Content-Security-Policy"] = "default-src ''none''; img-src ''self''"
+            response.headers["Content-Security-Policy"] = "default-src 'none'; img-src 'self'"
             response.headers["X-Content-Type-Options"] = "nosniff"
         return response
 

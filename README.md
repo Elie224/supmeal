@@ -11,9 +11,14 @@ Alternative a Mealie, Tandoor Recipes, Paprika : creer, importer, organiser et p
 - **Backend** : Python 3.12, FastAPI, SQLAlchemy 2 (async), Alembic, PostgreSQL 16
 - **Frontend** : React 18, Vite, TypeScript, TailwindCSS, shadcn/ui
 - **Realtime** : WebSocket natif FastAPI (chat cookbook)
-- **Auth** : fastapi-users (local) + OAuth2 (Google, GitHub) via authlib
+- **Auth** : authentification locale JWT + OAuth2 (Google, GitHub) via Authlib
 - **Recherche** : PostgreSQL Full Text Search (tsvector + pg_trgm)
 - **Conteneurisation** : Docker + docker-compose
+
+### Regle de discussion collaborative
+
+- Tous les membres d un cookbook (`creator`, `editor`, `commentator`, `reader`) peuvent participer au chat.
+- Le role `reader` reste en lecture seule pour les actions d edition de contenu (recettes, etc.).
 
 ## Demarrage rapide
 
