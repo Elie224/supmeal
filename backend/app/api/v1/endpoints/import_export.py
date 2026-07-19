@@ -7,7 +7,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -25,6 +25,24 @@ from app.core.security_utils import sanitize_csv_cell
 from app.services.import_export import mealie_to_recipe, recipe_to_dict
 
 router = APIRouter()
+
+
+def _parse_int(value: Any, field_name: str, default: int) -> int:
+    if value is None or value == "":
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail=f"Valeur invalide pour {field_name}: {value}")
+
+
+def _parse_float(value: Any, field_name: str) -> float | None:
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail=f"Valeur invalide pour {field_name}: {value}")
 
 
 # ---------- Export ----------
@@ -183,6 +201,7 @@ async def import_json(
         )
         for r in cb.get("recipes", []):
             await _create_recipe_from_dict(db, current_user.id, r, cookbook_id=cb_obj.id)
+            count += 1
     await db.commit()
     return {"imported_recipes": count}
 
@@ -201,7 +220,7 @@ async def import_csv(
     content = raw.decode("utf-8", errors="ignore")
     reader = csv.DictReader(io.StringIO(content))
     by_title: dict[str, dict[str, Any]] = {}
-    for row in reader:
+    for line_no, row in enumerate(reader, start=2):
         title = sanitize_csv_cell((row.get("title") or "").strip())
         if not title:
             continue
@@ -209,9 +228,9 @@ async def import_csv(
             by_title[title] = {
                 "title": title,
                 "description": row.get("description") or None,
-                "servings": int(row.get("servings") or 4),
-                "prep_time_minutes": int(row.get("prep_time") or 0),
-                "cook_time_minutes": int(row.get("cook_time") or 0),
+                "servings": _parse_int(row.get("servings"), f"servings (ligne {line_no})", 4),
+                "prep_time_minutes": _parse_int(row.get("prep_time"), f"prep_time (ligne {line_no})", 0),
+                "cook_time_minutes": _parse_int(row.get("cook_time"), f"cook_time (ligne {line_no})", 0),
                 "source_url": row.get("source") or None,
                 "ingredients": [],
                 "steps": [],
@@ -222,7 +241,7 @@ async def import_csv(
         if ing_name:
             entry["ingredients"].append({
                 "name": ing_name,
-                "quantity": float(row["quantity"]) if row.get("quantity") else None,
+                "quantity": _parse_float(row.get("quantity"), f"quantity (ligne {line_no})"),
                 "unit": row.get("unit") or None,
             })
         step_content = (row.get("step") or "").strip()
@@ -244,9 +263,9 @@ async def _create_recipe_from_dict(
         title=data.get("title", "Sans titre"),
         description=data.get("description"),
         source_url=data.get("source_url") or data.get("source"),
-        prep_time_minutes=int(data.get("prep_time_minutes") or 0),
-        cook_time_minutes=int(data.get("cook_time_minutes") or 0),
-        servings=int(data.get("servings") or 4),
+        prep_time_minutes=_parse_int(data.get("prep_time_minutes"), "prep_time_minutes", 0),
+        cook_time_minutes=_parse_int(data.get("cook_time_minutes"), "cook_time_minutes", 0),
+        servings=_parse_int(data.get("servings"), "servings", 4),
         difficulty=data.get("difficulty"),
         cuisine_type=data.get("cuisine_type") or data.get("cuisine"),
         image_url=data.get("image_url") or data.get("image"),
@@ -282,4 +301,23 @@ async def _create_recipe_from_dict(
             db.add(tag)
             await db.flush()
         db.add(RecipeTag(recipe_id=recipe.id, tag_id=tag.id))
+
+    # Garder la recherche plein texte coherente apres import.
+    parts = [
+        recipe.title or "",
+        recipe.description or "",
+        recipe.cuisine_type or "",
+        recipe.difficulty or "",
+    ]
+    parts.extend(str(ing.get("name", "")) for ing in data.get("ingredients", []) if isinstance(ing, dict))
+    parts.extend(
+        str(step.get("content", "")) if isinstance(step, dict) else str(step)
+        for step in data.get("steps", [])
+    )
+    parts.extend(str(t).strip().lower() for t in (data.get("tag_names") or []) if str(t).strip())
+    await db.execute(
+        text("UPDATE recipes SET search_vector = to_tsvector('french', :txt) WHERE id = :rid"),
+        {"txt": " ".join(parts), "rid": recipe.id},
+    )
+
     return recipe

@@ -108,7 +108,7 @@ async def upload_avatar(
 
     # Supprimer ancien avatar si local
     if current_user.avatar_url and current_user.avatar_url.startswith("/uploads/"):
-        old = Path(current_user.avatar_url.lstrip("/"))
+        old = upload_dir / Path(current_user.avatar_url).name
         if old.exists() and old.is_file():
             old.unlink()
 

@@ -11,7 +11,7 @@ from fastapi import (
     WebSocketDisconnect,
     status,
 )
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -82,15 +82,35 @@ async def list_my_cookbooks(
     )
     result = await db.execute(stmt)
     rows = result.all()
+    cookbook_ids = [cookbook.id for cookbook, _ in rows]
+
+    member_count_by_cookbook: dict[int, int] = {}
+    recipe_count_by_cookbook: dict[int, int] = {}
+
+    if cookbook_ids:
+        members_result = await db.execute(
+            select(CookbookMember.cookbook_id, func.count(CookbookMember.user_id))
+            .where(CookbookMember.cookbook_id.in_(cookbook_ids))
+            .group_by(CookbookMember.cookbook_id)
+        )
+        member_count_by_cookbook = {
+            cookbook_id: int(count)
+            for cookbook_id, count in members_result.all()
+        }
+
+        recipes_result = await db.execute(
+            select(Recipe.cookbook_id, func.count(Recipe.id))
+            .where(Recipe.cookbook_id.in_(cookbook_ids))
+            .group_by(Recipe.cookbook_id)
+        )
+        recipe_count_by_cookbook = {
+            int(cookbook_id): int(count)
+            for cookbook_id, count in recipes_result.all()
+            if cookbook_id is not None
+        }
+
     summaries: list[CookbookSummary] = []
     for cookbook, role in rows:
-        # Compter membres et recettes
-        members_count = await db.execute(
-            select(CookbookMember).where(CookbookMember.cookbook_id == cookbook.id)
-        )
-        recipes_count = await db.execute(
-            select(Recipe).where(Recipe.cookbook_id == cookbook.id)
-        )
         summaries.append(
             CookbookSummary(
                 id=cookbook.id,
@@ -98,8 +118,8 @@ async def list_my_cookbooks(
                 description=cookbook.description,
                 image_url=cookbook.image_url,
                 owner_id=cookbook.owner_id,
-                member_count=len(members_count.scalars().all()),
-                recipe_count=len(recipes_count.scalars().all()),
+                member_count=member_count_by_cookbook.get(cookbook.id, 0),
+                recipe_count=recipe_count_by_cookbook.get(cookbook.id, 0),
                 my_role=role,
                 created_at=cookbook.created_at,
             )
@@ -267,8 +287,7 @@ async def list_cookbook_recipes(
         .where(Recipe.cookbook_id == cookbook_id)
     )
     if search:
-        from sqlalchemy import func
-        ts_query = func.to_tsquery("french", func.replace(func.lower(search), " ", " & "))
+        ts_query = func.websearch_to_tsquery("french", search)
         stmt = stmt.where(
             or_(
                 Recipe.search_vector.op("@@")(ts_query),

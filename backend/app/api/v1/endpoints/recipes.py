@@ -273,7 +273,7 @@ async def list_recipes(
 
     if search:
         # Recherche plein texte + trigram en fallback
-        ts_query = func.to_tsquery("french", func.replace(func.lower(search), " ", " & "))
+        ts_query = func.websearch_to_tsquery("french", search)
         conditions.append(
             or_(
                 Recipe.search_vector.op("@@")(ts_query),
@@ -445,7 +445,7 @@ async def upload_recipe_image(
 
     # Supprimer ancienne image
     if recipe.image_url and recipe.image_url.startswith("/uploads/"):
-        old = Path(recipe.image_url.lstrip("/"))
+        old = upload_dir / Path(recipe.image_url).name
         if old.exists() and old.is_file():
             old.unlink()
 
