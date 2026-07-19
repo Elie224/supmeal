@@ -3,6 +3,14 @@ import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../lib/api";
 import type { InvitationAcceptResponse } from "../lib/types";
 
+function extractErrorDetail(err: unknown): string {
+  const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+  if (typeof detail === "string" && detail.trim()) {
+    return detail;
+  }
+  return "Invitation invalide, expiree ou deja utilisee.";
+}
+
 export default function InvitationAcceptPage() {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
@@ -27,7 +35,7 @@ export default function InvitationAcceptPage() {
       </p>
       {acceptInvitation.isError && (
         <div className="text-sm text-red-600">
-          Invitation invalide, expiree ou deja utilisee.
+          {extractErrorDetail(acceptInvitation.error)}
         </div>
       )}
       <div className="flex gap-2">
