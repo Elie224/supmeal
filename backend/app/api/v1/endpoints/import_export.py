@@ -6,6 +6,7 @@ import json
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from pydantic import ValidationError
 from fastapi.responses import StreamingResponse
 from sqlalchemy import or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,12 +16,14 @@ from app.core.deps import CurrentUser, get_db
 from app.models.cookbook import Cookbook, CookbookMember, CookbookRole
 from app.models.recipe import (
     Recipe,
+    RecipeFavorite,
     RecipeIngredient,
     RecipeStep,
     RecipeTag,
     Tag,
 )
 from app.schemas.recipe import RecipeRead
+from app.schemas.import_export import MealieImportPayload, SupmealImportPayload
 from app.core.security_utils import sanitize_csv_cell
 from app.services.import_export import mealie_to_recipe, recipe_to_dict
 
@@ -39,8 +42,9 @@ def _parse_int(value: Any, field_name: str, default: int) -> int:
 def _parse_float(value: Any, field_name: str) -> float | None:
     if value is None or value == "":
         return None
+    normalized = str(value).strip().replace(",", ".")
     try:
-        return float(value)
+        return float(normalized)
     except (TypeError, ValueError):
         raise HTTPException(status_code=400, detail=f"Valeur invalide pour {field_name}: {value}")
 
@@ -176,11 +180,22 @@ async def import_json(
         raise HTTPException(status_code=400, detail=f"JSON invalide: {e}")
 
     fmt = data.get("format", "supmeal-json")
-    recipes = []
-    if fmt == "mealie":
-        recipes = [mealie_to_recipe(r) for r in data.get("recipes", [])]
-    else:
-        recipes = data.get("recipes", [])
+    recipes: list[dict[str, Any]] = []
+    cookbooks_payload: list[dict[str, Any]] = []
+
+    try:
+        if fmt == "mealie":
+            validated = MealieImportPayload.model_validate(data)
+            recipes = [
+                mealie_to_recipe(recipe.model_dump(mode="json"))
+                for recipe in validated.recipes
+            ]
+        else:
+            validated = SupmealImportPayload.model_validate(data)
+            recipes = [recipe.model_dump(mode="json") for recipe in validated.recipes]
+            cookbooks_payload = [cookbook.model_dump(mode="json") for cookbook in validated.cookbooks]
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors())
 
     count = 0
     for r in recipes:
@@ -188,7 +203,7 @@ async def import_json(
         count += 1
 
     # Cookbooks (uniquement format supmeal-json)
-    for cb in data.get("cookbooks", []):
+    for cb in cookbooks_payload:
         cb_obj = Cookbook(
             name=cb["name"],
             description=cb.get("description"),
@@ -211,7 +226,7 @@ async def import_csv(
     file: UploadFile = File(...),
     current_user: CurrentUser = ...,
     db: AsyncSession = Depends(get_db),
-) -> dict[str, int]:
+) -> dict[str, Any]:
     """Importe un CSV. Le regroupement par titre est automatique."""
     MAX_IMPORT_SIZE = 5 * 1024 * 1024
     raw = await file.read(MAX_IMPORT_SIZE + 1)
@@ -220,39 +235,55 @@ async def import_csv(
     content = raw.decode("utf-8", errors="ignore")
     reader = csv.DictReader(io.StringIO(content))
     by_title: dict[str, dict[str, Any]] = {}
+    row_errors: list[dict[str, Any]] = []
+    ignored_rows = 0
     for line_no, row in enumerate(reader, start=2):
         title = sanitize_csv_cell((row.get("title") or "").strip())
         if not title:
+            ignored_rows += 1
             continue
-        if title not in by_title:
-            by_title[title] = {
-                "title": title,
-                "description": row.get("description") or None,
-                "servings": _parse_int(row.get("servings"), f"servings (ligne {line_no})", 4),
-                "prep_time_minutes": _parse_int(row.get("prep_time"), f"prep_time (ligne {line_no})", 0),
-                "cook_time_minutes": _parse_int(row.get("cook_time"), f"cook_time (ligne {line_no})", 0),
-                "source_url": row.get("source") or None,
-                "ingredients": [],
-                "steps": [],
-                "tag_names": [t.strip() for t in (row.get("tags") or "").split(",") if t.strip()],
-            }
-        entry = by_title[title]
-        ing_name = (row.get("ingredient") or "").strip()
-        if ing_name:
-            entry["ingredients"].append({
-                "name": ing_name,
-                "quantity": _parse_float(row.get("quantity"), f"quantity (ligne {line_no})"),
-                "unit": row.get("unit") or None,
-            })
-        step_content = (row.get("step") or "").strip()
-        if step_content:
-            entry["steps"].append({"content": step_content})
+        try:
+            if title not in by_title:
+                by_title[title] = {
+                    "title": title,
+                    "description": row.get("description") or None,
+                    "servings": _parse_int(row.get("servings"), f"servings (ligne {line_no})", 4),
+                    "prep_time_minutes": _parse_int(row.get("prep_time"), f"prep_time (ligne {line_no})", 0),
+                    "cook_time_minutes": _parse_int(row.get("cook_time"), f"cook_time (ligne {line_no})", 0),
+                    "source_url": row.get("source") or None,
+                    "ingredients": [],
+                    "steps": [],
+                    "tag_names": [t.strip() for t in (row.get("tags") or "").split(",") if t.strip()],
+                }
+            entry = by_title[title]
+            ing_name = (row.get("ingredient") or "").strip()
+            if ing_name:
+                entry["ingredients"].append({
+                    "name": ing_name,
+                    "quantity": _parse_float(row.get("quantity"), f"quantity (ligne {line_no})"),
+                    "unit": row.get("unit") or None,
+                })
+            step_content = (row.get("step") or "").strip()
+            if step_content:
+                entry["steps"].append({"content": step_content})
+        except HTTPException as exc:
+            ignored_rows += 1
+            row_errors.append(
+                {
+                    "line": line_no,
+                    "message": str(exc.detail),
+                }
+            )
     count = 0
     for r in by_title.values():
         await _create_recipe_from_dict(db, current_user.id, r)
         count += 1
     await db.commit()
-    return {"imported_recipes": count}
+    return {
+        "imported_recipes": count,
+        "ignored_rows": ignored_rows,
+        "errors": row_errors,
+    }
 
 
 async def _create_recipe_from_dict(
@@ -274,6 +305,9 @@ async def _create_recipe_from_dict(
     )
     db.add(recipe)
     await db.flush()
+
+    if data.get("is_favorite"):
+        db.add(RecipeFavorite(user_id=user_id, recipe_id=recipe.id))
     for i, ing in enumerate(data.get("ingredients", [])):
         if isinstance(ing, dict):
             db.add(

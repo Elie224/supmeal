@@ -5,7 +5,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
-from app.models.cookbook import CookbookRole
+from app.models.cookbook import CookbookRole, InvitationStatus
 from app.schemas.user import UserPublic
 
 
@@ -75,6 +75,26 @@ class CookbookMessageRead(BaseModel):
     author_id: int
     author: UserPublic | None = None
     content: str
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CookbookInvitationCreate(BaseModel):
+    invited_email: EmailStr
+    invited_role: CookbookRole = CookbookRole.READER
+    expires_in_days: int = Field(default=7, ge=1, le=30)
+
+
+class CookbookInvitationRead(BaseModel):
+    id: int
+    cookbook_id: int
+    invited_email: EmailStr
+    invited_role: CookbookRole
+    token: str
+    status: InvitationStatus
+    expires_at: datetime
+    invited_by_user_id: int
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

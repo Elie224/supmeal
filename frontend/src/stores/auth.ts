@@ -15,6 +15,7 @@ interface AuthState {
   // Le token JWT est maintenant en cookie httpOnly (defense XSS).
   // On garde un flag isAuthenticated + le user dans le store.
   isAuthenticated: boolean;
+  authStatus: "loading" | "authenticated" | "anonymous";
   user: AuthUser | null;
   setUser: (user: AuthUser) => void;
   clear: () => void;
@@ -25,26 +26,29 @@ export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
       isAuthenticated: false,
+      authStatus: "loading",
       user: null,
       setUser: (user) => {
         // preserve previous role if not provided
         const prev = useAuthStore.getState().user;
         const merged = prev?.role && !user.role ? { ...user, role: prev.role } : user;
         localStorage.setItem("supmeal_user", JSON.stringify(merged));
-        set({ isAuthenticated: true, user: merged });
+        set({ isAuthenticated: true, authStatus: "authenticated", user: merged });
       },
       clear: () => {
         localStorage.removeItem("supmeal_user");
         localStorage.removeItem("supmeal_token");
-        set({ isAuthenticated: false, user: null });
+        set({ isAuthenticated: false, authStatus: "anonymous", user: null });
       },
       hydrate: async () => {
         // Au demarrage, on verifie si on a un cookie valide via /auth/me.
         // Si oui, on recupere le user. Sinon, on clear.
+        set({ authStatus: "loading" });
         try {
           const { data } = await api.get("/auth/me");
           set({
             isAuthenticated: true,
+            authStatus: "authenticated",
             user: {
               id: data.id,
               email: data.email,
@@ -56,7 +60,7 @@ export const useAuthStore = create<AuthState>()(
           });
           localStorage.setItem("supmeal_user", JSON.stringify(data));
         } catch {
-          set({ isAuthenticated: false, user: null });
+          set({ isAuthenticated: false, authStatus: "anonymous", user: null });
         }
       },
     }),

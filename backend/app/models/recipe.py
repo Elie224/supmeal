@@ -137,6 +137,19 @@ class RecipeTag(Base):
     )
 
 
+class RecipeFavorite(Base, TimestampMixin):
+    """Favoris personnels (utilisateur <-> recette)."""
+
+    __tablename__ = "recipe_favorites"
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True, index=True
+    )
+    recipe_id: Mapped[int] = mapped_column(
+        ForeignKey("recipes.id", ondelete="CASCADE"), primary_key=True, index=True
+    )
+
+
 class MealPlan(Base, TimestampMixin):
     __tablename__ = "meal_plans"
 

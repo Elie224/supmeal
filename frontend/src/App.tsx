@@ -18,6 +18,10 @@ import { useEffect } from "react";
 
 function PrivateRoute({ children }: { children: ReactElement }) {
   const isAuth = useAuthStore((s) => s.isAuthenticated);
+  const authStatus = useAuthStore((s) => s.authStatus);
+  if (authStatus === "loading") {
+    return <div className="min-h-screen grid place-items-center text-charcoal-500">Chargement...</div>;
+  }
   if (!isAuth) return <Navigate to="/login" replace />;
   return children;
 }

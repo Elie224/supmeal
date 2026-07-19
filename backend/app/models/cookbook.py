@@ -29,6 +29,13 @@ class CookbookRole(str, enum.Enum):
     READER = "reader"
 
 
+class InvitationStatus(str, enum.Enum):
+    PENDING = "pending"
+    ACCEPTED = "accepted"
+    EXPIRED = "expired"
+    REVOKED = "revoked"
+
+
 class Cookbook(Base, TimestampMixin):
     __tablename__ = "cookbooks"
 
@@ -78,6 +85,32 @@ class CookbookMember(Base, TimestampMixin):
 
     __table_args__ = (
         UniqueConstraint("cookbook_id", "user_id", name="uq_cookbook_member"),
+    )
+
+
+class CookbookInvitation(Base, TimestampMixin):
+    __tablename__ = "cookbook_invitations"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    cookbook_id: Mapped[int] = mapped_column(
+        ForeignKey("cookbooks.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    invited_email: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    invited_role: Mapped[CookbookRole] = mapped_column(
+        Enum(CookbookRole, name="cookbook_role", values_callable=lambda x: [e.value for e in x]),
+        default=CookbookRole.READER,
+        nullable=False,
+    )
+    token: Mapped[str] = mapped_column(String(128), unique=True, nullable=False, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    status: Mapped[InvitationStatus] = mapped_column(
+        Enum(InvitationStatus, name="invitation_status", values_callable=lambda x: [e.value for e in x]),
+        default=InvitationStatus.PENDING,
+        nullable=False,
+        index=True,
+    )
+    invited_by_user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
 
 

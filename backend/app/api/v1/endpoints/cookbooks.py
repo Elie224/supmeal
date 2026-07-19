@@ -1,5 +1,7 @@
 """Endpoints Cookbook : CRUD, membres, recettes du cookbook, messagerie."""
 
+import secrets
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import (
@@ -18,16 +20,20 @@ from sqlalchemy.orm import selectinload
 from app.core.deps import CurrentUser, get_db
 from app.models.cookbook import (
     Cookbook,
+    CookbookInvitation,
     CookbookMember,
     CookbookMessage,
     CookbookRole,
+    InvitationStatus,
 )
 from app.models.recipe import Recipe
-from app.models.recipe import RecipeIngredient, RecipeStep
+from app.models.recipe import RecipeFavorite, RecipeIngredient, RecipeStep
 from app.models.user import User
 from app.schemas.cookbook import (
     AddMemberRequest,
     CookbookCreate,
+    CookbookInvitationCreate,
+    CookbookInvitationRead,
     CookbookMessageCreate,
     CookbookMessageRead,
     CookbookRead,
@@ -40,6 +46,12 @@ from app.schemas.user import UserPublic
 from app.services.connection_manager import manager
 
 router = APIRouter()
+
+
+def _recipe_read_with_user_favorite(recipe: Recipe, is_favorite: bool) -> RecipeRead:
+    data = RecipeRead.model_validate(recipe).model_dump()
+    data["is_favorite"] = is_favorite
+    return RecipeRead.model_validate(data)
 
 
 # ---------- Cookbook CRUD ----------
@@ -257,6 +269,109 @@ async def remove_member(
     await db.commit()
 
 
+@router.post("/{cookbook_id}/invitations", response_model=CookbookInvitationRead, status_code=201)
+async def create_invitation(
+    cookbook_id: int,
+    payload: CookbookInvitationCreate,
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+) -> CookbookInvitationRead:
+    role = await _get_member_role(db, cookbook_id, current_user.id)
+    if role != CookbookRole.CREATOR:
+        raise HTTPException(status_code=403, detail="Reserve au createur")
+
+    invited_email = payload.invited_email.lower().strip()
+
+    user_result = await db.execute(select(User).where(User.email == invited_email))
+    user = user_result.scalar_one_or_none()
+    if user:
+        existing = await _get_member_role(db, cookbook_id, user.id)
+        if existing is not None:
+            raise HTTPException(status_code=409, detail="Utilisateur deja membre")
+
+    pending_result = await db.execute(
+        select(CookbookInvitation).where(
+            (CookbookInvitation.cookbook_id == cookbook_id)
+            & (CookbookInvitation.invited_email == invited_email)
+            & (CookbookInvitation.status == InvitationStatus.PENDING)
+        )
+    )
+    pending = pending_result.scalars().all()
+    for inv in pending:
+        inv.status = InvitationStatus.REVOKED
+
+    invitation = CookbookInvitation(
+        cookbook_id=cookbook_id,
+        invited_email=invited_email,
+        invited_role=payload.invited_role,
+        token=secrets.token_urlsafe(32),
+        expires_at=datetime.now(UTC) + timedelta(days=payload.expires_in_days),
+        status=InvitationStatus.PENDING,
+        invited_by_user_id=current_user.id,
+    )
+    db.add(invitation)
+    await db.commit()
+    await db.refresh(invitation)
+    return CookbookInvitationRead.model_validate(invitation)
+
+
+@router.get("/{cookbook_id}/invitations", response_model=list[CookbookInvitationRead])
+async def list_invitations(
+    cookbook_id: int,
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+    only_pending: bool = True,
+) -> list[CookbookInvitationRead]:
+    role = await _get_member_role(db, cookbook_id, current_user.id)
+    if role != CookbookRole.CREATOR:
+        raise HTTPException(status_code=403, detail="Reserve au createur")
+
+    stmt = select(CookbookInvitation).where(CookbookInvitation.cookbook_id == cookbook_id)
+    if only_pending:
+        stmt = stmt.where(CookbookInvitation.status == InvitationStatus.PENDING)
+    stmt = stmt.order_by(CookbookInvitation.created_at.desc())
+    result = await db.execute(stmt)
+    return [CookbookInvitationRead.model_validate(i) for i in result.scalars().all()]
+
+
+@router.post("/invitations/{token}/accept", status_code=200)
+async def accept_invitation(
+    token: str,
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
+    result = await db.execute(select(CookbookInvitation).where(CookbookInvitation.token == token))
+    invitation = result.scalar_one_or_none()
+    if not invitation:
+        raise HTTPException(status_code=404, detail="Invitation introuvable")
+
+    if invitation.status != InvitationStatus.PENDING:
+        raise HTTPException(status_code=400, detail="Invitation non valide")
+
+    if invitation.invited_email.lower() != current_user.email.lower():
+        raise HTTPException(status_code=403, detail="Cette invitation ne vous est pas destinee")
+
+    now = datetime.now(UTC)
+    if invitation.expires_at < now:
+        invitation.status = InvitationStatus.EXPIRED
+        await db.commit()
+        raise HTTPException(status_code=400, detail="Invitation expiree")
+
+    existing = await _get_member_role(db, invitation.cookbook_id, current_user.id)
+    if existing is None:
+        db.add(
+            CookbookMember(
+                cookbook_id=invitation.cookbook_id,
+                user_id=current_user.id,
+                role=invitation.invited_role,
+            )
+        )
+
+    invitation.status = InvitationStatus.ACCEPTED
+    await db.commit()
+    return {"detail": "Invitation acceptee"}
+
+
 # ---------- Recettes du cookbook ----------
 
 @router.get("/{cookbook_id}/recipes", response_model=list[RecipeRead])
@@ -315,12 +430,24 @@ async def list_cookbook_recipes(
         stmt = stmt.where(Recipe.id.in_(ing_subq))
     if max_prep_time is not None:
         stmt = stmt.where(Recipe.prep_time_minutes <= max_prep_time)
-    if favorites_only:
-        stmt = stmt.where(Recipe.is_favorite.is_(True))
-
     stmt = stmt.order_by(Recipe.updated_at.desc()).offset(skip).limit(limit)
     result = await db.execute(stmt)
-    return [RecipeRead.model_validate(r) for r in result.scalars().unique().all()]
+    recipes = result.scalars().unique().all()
+
+    favorite_ids: set[int] = set()
+    if recipes:
+        fav_result = await db.execute(
+            select(RecipeFavorite.recipe_id).where(
+                (RecipeFavorite.user_id == current_user.id)
+                & (RecipeFavorite.recipe_id.in_([r.id for r in recipes]))
+            )
+        )
+        favorite_ids = set(fav_result.scalars().all())
+
+    if favorites_only:
+        recipes = [r for r in recipes if r.id in favorite_ids]
+
+    return [_recipe_read_with_user_favorite(r, r.id in favorite_ids) for r in recipes]
 
 
 @router.post("/{cookbook_id}/recipes", response_model=RecipeRead, status_code=201)
@@ -345,7 +472,7 @@ async def create_cookbook_recipe(
         difficulty=payload.difficulty,
         cuisine_type=payload.cuisine_type,
         image_url=payload.image_url,
-        is_favorite=payload.is_favorite,
+        is_favorite=False,
         is_public=False,
         owner_id=current_user.id,
         cookbook_id=cookbook_id,
@@ -389,7 +516,8 @@ async def create_cookbook_recipe(
         )
         .where(Recipe.id == recipe.id)
     )
-    return RecipeRead.model_validate(result.scalar_one())
+    recipe_out = result.scalar_one()
+    return _recipe_read_with_user_favorite(recipe_out, False)
 
 
 # ---------- Messagerie instantanee ----------
