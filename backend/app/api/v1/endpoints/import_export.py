@@ -8,7 +8,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import ValidationError
 from fastapi.responses import StreamingResponse
-from sqlalchemy import or_, select, text
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -16,16 +16,12 @@ from app.core.deps import CurrentUser, get_db
 from app.models.cookbook import Cookbook, CookbookMember, CookbookRole
 from app.models.recipe import (
     Recipe,
-    RecipeFavorite,
-    RecipeIngredient,
-    RecipeStep,
-    RecipeTag,
-    Tag,
 )
 from app.schemas.recipe import RecipeRead
 from app.schemas.import_export import MealieImportPayload, SupmealImportPayload
 from app.core.security_utils import sanitize_csv_cell
 from app.services.import_export import mealie_to_recipe, recipe_to_dict
+from app.services.recipe_service import create_recipe as svc_create_recipe
 
 router = APIRouter()
 
@@ -242,9 +238,11 @@ async def import_csv(
         if not title:
             ignored_rows += 1
             continue
+        entry = by_title.get(title)
+        new_entry = entry is None
         try:
-            if title not in by_title:
-                by_title[title] = {
+            if new_entry:
+                entry = {
                     "title": title,
                     "description": row.get("description") or None,
                     "servings": _parse_int(row.get("servings"), f"servings (ligne {line_no})", 4),
@@ -255,7 +253,7 @@ async def import_csv(
                     "steps": [],
                     "tag_names": [t.strip() for t in (row.get("tags") or "").split(",") if t.strip()],
                 }
-            entry = by_title[title]
+            assert entry is not None
             ing_name = (row.get("ingredient") or "").strip()
             if ing_name:
                 entry["ingredients"].append({
@@ -266,6 +264,8 @@ async def import_csv(
             step_content = (row.get("step") or "").strip()
             if step_content:
                 entry["steps"].append({"content": step_content})
+            if new_entry:
+                by_title[title] = entry
         except HTTPException as exc:
             ignored_rows += 1
             row_errors.append(
@@ -290,7 +290,30 @@ async def _create_recipe_from_dict(
     db: AsyncSession, user_id: int, data: dict[str, Any], cookbook_id: int | None = None
 ) -> Recipe:
     """Helper : cree une recette a partir d'un dict (import)."""
-    recipe = Recipe(
+    ingredients: list[dict[str, Any]] = []
+    for i, ing in enumerate(data.get("ingredients", [])):
+        if isinstance(ing, dict):
+            ingredients.append(
+                {
+                    "name": ing.get("name", ""),
+                    "quantity": ing.get("quantity"),
+                    "unit": ing.get("unit"),
+                    "note": ing.get("note"),
+                    "position": i,
+                }
+            )
+
+    steps: list[dict[str, Any]] = []
+    for i, step in enumerate(data.get("steps", [])):
+        if isinstance(step, dict):
+            content = step.get("content", "")
+        else:
+            content = str(step)
+        steps.append({"content": content, "position": i})
+
+    return await svc_create_recipe(
+        db,
+        owner_id=user_id,
         title=data.get("title", "Sans titre"),
         description=data.get("description"),
         source_url=data.get("source_url") or data.get("source"),
@@ -300,58 +323,10 @@ async def _create_recipe_from_dict(
         difficulty=data.get("difficulty"),
         cuisine_type=data.get("cuisine_type") or data.get("cuisine"),
         image_url=data.get("image_url") or data.get("image"),
-        owner_id=user_id,
+        is_public=bool(data.get("is_public", False)),
         cookbook_id=cookbook_id,
+        ingredients=ingredients,
+        steps=steps,
+        tag_names=[str(t) for t in (data.get("tag_names") or [])],
+        favorite_user_id=user_id if data.get("is_favorite") else None,
     )
-    db.add(recipe)
-    await db.flush()
-
-    if data.get("is_favorite"):
-        db.add(RecipeFavorite(user_id=user_id, recipe_id=recipe.id))
-    for i, ing in enumerate(data.get("ingredients", [])):
-        if isinstance(ing, dict):
-            db.add(
-                RecipeIngredient(
-                    recipe_id=recipe.id,
-                    name=ing.get("name", ""),
-                    quantity=ing.get("quantity"),
-                    unit=ing.get("unit"),
-                    position=i,
-                )
-            )
-    for i, step in enumerate(data.get("steps", [])):
-        content = step.get("content") if isinstance(step, dict) else str(step)
-        db.add(
-            RecipeStep(recipe_id=recipe.id, content=content, position=i)
-        )
-    for tag_name in data.get("tag_names") or []:
-        tag_name = tag_name.lower().strip()
-        if not tag_name:
-            continue
-        result = await db.execute(select(Tag).where(Tag.name == tag_name))
-        tag = result.scalar_one_or_none()
-        if not tag:
-            tag = Tag(name=tag_name)
-            db.add(tag)
-            await db.flush()
-        db.add(RecipeTag(recipe_id=recipe.id, tag_id=tag.id))
-
-    # Garder la recherche plein texte coherente apres import.
-    parts = [
-        recipe.title or "",
-        recipe.description or "",
-        recipe.cuisine_type or "",
-        recipe.difficulty or "",
-    ]
-    parts.extend(str(ing.get("name", "")) for ing in data.get("ingredients", []) if isinstance(ing, dict))
-    parts.extend(
-        str(step.get("content", "")) if isinstance(step, dict) else str(step)
-        for step in data.get("steps", [])
-    )
-    parts.extend(str(t).strip().lower() for t in (data.get("tag_names") or []) if str(t).strip())
-    await db.execute(
-        text("UPDATE recipes SET search_vector = to_tsvector('french', :txt) WHERE id = :rid"),
-        {"txt": " ".join(parts), "rid": recipe.id},
-    )
-
-    return recipe

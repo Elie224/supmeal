@@ -27,7 +27,7 @@ from app.models.cookbook import (
     InvitationStatus,
 )
 from app.models.recipe import Recipe
-from app.models.recipe import RecipeFavorite, RecipeIngredient, RecipeStep
+from app.models.recipe import RecipeFavorite, RecipeIngredient
 from app.models.user import User
 from app.schemas.cookbook import (
     AddMemberRequest,
@@ -43,6 +43,7 @@ from app.schemas.cookbook import (
 )
 from app.schemas.recipe import RecipeCreate, RecipeRead
 from app.schemas.user import UserPublic
+from app.services.recipe_service import create_recipe as svc_create_recipe
 from app.services.connection_manager import manager
 
 router = APIRouter()
@@ -461,8 +462,9 @@ async def create_cookbook_recipe(
     if role not in (CookbookRole.CREATOR, CookbookRole.EDITOR):
         raise HTTPException(status_code=403, detail="Permission insuffisante")
 
-    tag_ids = payload.tag_ids or []
-    recipe = Recipe(
+    recipe = await svc_create_recipe(
+        db,
+        owner_id=current_user.id,
         title=payload.title,
         description=payload.description,
         source_url=payload.source_url,
@@ -472,39 +474,12 @@ async def create_cookbook_recipe(
         difficulty=payload.difficulty,
         cuisine_type=payload.cuisine_type,
         image_url=payload.image_url,
-        is_favorite=False,
         is_public=False,
-        owner_id=current_user.id,
         cookbook_id=cookbook_id,
+        ingredients=[ing.model_dump() for ing in payload.ingredients],
+        steps=[step.model_dump() for step in payload.steps],
+        tag_ids=payload.tag_ids or [],
     )
-    db.add(recipe)
-    await db.flush()
-
-    for ing in payload.ingredients:
-        db.add(
-            RecipeIngredient(
-                recipe_id=recipe.id,
-                name=ing.name,
-                quantity=ing.quantity,
-                unit=ing.unit,
-                note=ing.note,
-                position=ing.position,
-            )
-        )
-    for step in payload.steps:
-        db.add(
-            RecipeStep(recipe_id=recipe.id, content=step.content, position=step.position)
-        )
-    if tag_ids:
-        from app.models.recipe import RecipeTag, Tag
-        result = await db.execute(select(Tag).where(Tag.id.in_(tag_ids)))
-        for tag in result.scalars().all():
-            db.add(RecipeTag(recipe_id=recipe.id, tag_id=tag.id))
-
-    await db.commit()
-    # search_vector
-    from app.api.v1.endpoints.recipes import _build_search_vector
-    await _build_search_vector(recipe.id, db)
     await db.commit()
 
     result = await db.execute(

@@ -706,3 +706,167 @@ async def test_import_mealie_json_exhaustive(client):
     assert any(i["name"] == "poulet" for i in body["ingredients"])
     assert any(s["content"] == "Faire revenir" for s in body["steps"])
     assert any(t["name"] == "curry" for t in body["tags"])
+
+
+@pytest.mark.asyncio
+async def test_personal_favorites_are_isolated_between_users(client):
+    owner_headers = await _auth_headers(
+        client,
+        "fav-owner@example.com",
+        "fav_owner",
+        "SupMeal!FavOwner#2026",
+    )
+    member_headers = await _auth_headers(
+        client,
+        "fav-member@example.com",
+        "fav_member",
+        "SupMeal!FavMember#2026",
+    )
+
+    cb = await client.post(
+        "/api/v1/cookbooks",
+        json={"name": "Fav Shared", "description": "test"},
+        headers=owner_headers,
+    )
+    assert cb.status_code == 201, cb.text
+    cb_id = cb.json()["id"]
+
+    add_member = await client.post(
+        f"/api/v1/cookbooks/{cb_id}/members",
+        json={"user_email": "fav-member@example.com", "role": "reader"},
+        headers=owner_headers,
+    )
+    assert add_member.status_code == 201, add_member.text
+
+    recipe = await client.post(
+        f"/api/v1/cookbooks/{cb_id}/recipes",
+        json={
+            "title": "Shared Favorite",
+            "ingredients": [{"name": "tomate", "position": 0}],
+            "steps": [{"content": "couper", "position": 0}],
+        },
+        headers=owner_headers,
+    )
+    assert recipe.status_code == 201, recipe.text
+    recipe_id = recipe.json()["id"]
+
+    toggle = await client.post(f"/api/v1/recipes/{recipe_id}/favorite", headers=member_headers)
+    assert toggle.status_code == 200, toggle.text
+    assert toggle.json()["is_favorite"] is True
+
+    member_favs = await client.get("/api/v1/recipes?favorites_only=true", headers=member_headers)
+    assert member_favs.status_code == 200, member_favs.text
+    assert any(r["id"] == recipe_id for r in member_favs.json())
+
+    owner_favs = await client.get("/api/v1/recipes?favorites_only=true", headers=owner_headers)
+    assert owner_favs.status_code == 200, owner_favs.text
+    assert all(r["id"] != recipe_id for r in owner_favs.json())
+
+
+@pytest.mark.asyncio
+async def test_cookbook_invitation_token_acceptance(client):
+    owner_headers = await _auth_headers(
+        client,
+        "invite-owner@example.com",
+        "invite_owner",
+        "SupMeal!InviteOwner#2026",
+    )
+    invited_headers = await _auth_headers(
+        client,
+        "invitee@example.com",
+        "invitee_user",
+        "SupMeal!Invitee#2026",
+    )
+
+    cb = await client.post(
+        "/api/v1/cookbooks",
+        json={"name": "Invite CB", "description": "invite flow"},
+        headers=owner_headers,
+    )
+    assert cb.status_code == 201, cb.text
+    cb_id = cb.json()["id"]
+
+    invite = await client.post(
+        f"/api/v1/cookbooks/{cb_id}/invitations",
+        json={"invited_email": "invitee@example.com", "invited_role": "commentator", "expires_in_days": 7},
+        headers=owner_headers,
+    )
+    assert invite.status_code == 201, invite.text
+    token = invite.json()["token"]
+
+    accept = await client.post(
+        f"/api/v1/cookbooks/invitations/{token}/accept",
+        headers=invited_headers,
+    )
+    assert accept.status_code == 200, accept.text
+
+    invited_view = await client.get(f"/api/v1/cookbooks/{cb_id}", headers=invited_headers)
+    assert invited_view.status_code == 200, invited_view.text
+    members = invited_view.json().get("members", [])
+    role = next((m["role"] for m in members if m["user"]["username"] == "invitee_user"), None)
+    assert role == "commentator"
+
+
+@pytest.mark.asyncio
+async def test_import_json_invalid_schema_returns_422(client):
+    headers = await _auth_headers(
+        client,
+        "invalid-import@example.com",
+        "invalid_import_user",
+        "SupMeal!InvalidImport#2026",
+    )
+
+    payload = {
+        "format": "supmeal-json",
+        "version": 1,
+        "recipes": [
+            {
+                "title": "Broken",
+                "servings": "beaucoup",
+                "ingredients": [{"name": "x"}],
+                "steps": [{"content": "y"}],
+            }
+        ],
+    }
+
+    upload = await client.post(
+        "/api/v1/import-export/json",
+        files={
+            "file": (
+                "invalid.json",
+                json.dumps(payload).encode("utf-8"),
+                "application/json",
+            )
+        },
+        headers=headers,
+    )
+    assert upload.status_code == 422, upload.text
+
+
+@pytest.mark.asyncio
+async def test_import_csv_invalid_rows_are_reported(client):
+    headers = await _auth_headers(
+        client,
+        "csv-invalid@example.com",
+        "csv_invalid_user",
+        "SupMeal!CsvInvalid#2026",
+    )
+
+    csv_content = "\n".join(
+        [
+            "title,description,servings,prep_time,cook_time,ingredient,quantity,unit,step,tags,source",
+            "Recette OK,desc,2,10,5,tomate,1,pc,melanger,tag,https://example.com",
+            "Recette KO,desc,2,10,5,oignon,N/A,pc,cuire,tag,https://example.com",
+        ]
+    )
+
+    upload = await client.post(
+        "/api/v1/import-export/csv",
+        files={"file": ("bad.csv", csv_content.encode("utf-8"), "text/csv")},
+        headers=headers,
+    )
+    assert upload.status_code == 201, upload.text
+    data = upload.json()
+    assert data["imported_recipes"] == 1
+    assert data["ignored_rows"] == 1
+    assert len(data["errors"]) == 1

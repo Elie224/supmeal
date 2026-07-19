@@ -15,7 +15,7 @@ from fastapi import (
     UploadFile,
     status,
 )
-from sqlalchemy import and_, func, or_, select, text
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,6 +35,8 @@ from app.models.recipe import (
     RecipeTag,
     Tag,
 )
+from app.services.recipe_service import create_recipe as svc_create_recipe
+from app.services.recipe_service import update_recipe as svc_update_recipe
 from app.schemas.recipe import (
     CommentCreate,
     CommentRead,
@@ -113,36 +115,6 @@ async def _favorite_recipe_ids(db: AsyncSession, user_id: int, recipe_ids: list[
     return set(result.scalars().all())
 
 
-async def _build_search_vector(recipe_id: int, db: AsyncSession) -> None:
-    """Reconstruit le tsvector d'une recette (utilise par trigger ou a la main)."""
-    result = await db.execute(
-        select(Recipe)
-        .options(
-            selectinload(Recipe.ingredients),
-            selectinload(Recipe.steps),
-            selectinload(Recipe.tags),
-        )
-        .where(Recipe.id == recipe_id)
-    )
-    recipe = result.scalar_one_or_none()
-    if not recipe:
-        return
-    parts = [
-        recipe.title or "",
-        recipe.description or "",
-        recipe.cuisine_type or "",
-        recipe.difficulty or "",
-    ]
-    parts.extend(i.name for i in recipe.ingredients)
-    parts.extend(s.content for s in recipe.steps)
-    parts.extend(t.name for t in recipe.tags)
-    full_text = " ".join(parts)
-    await db.execute(
-        text("UPDATE recipes SET search_vector = to_tsvector('french', :txt) WHERE id = :rid"),
-        {"txt": full_text, "rid": recipe_id},
-    )
-
-
 # ---------- Endpoints CRUD ----------
 
 @router.post("", response_model=RecipeRead, status_code=status.HTTP_201_CREATED)
@@ -160,7 +132,9 @@ async def create_recipe(
             raise HTTPException(status_code=403, detail="Vous n etes pas membre de ce cookbook")
         if role not in (CookbookRole.CREATOR, CookbookRole.EDITOR):
             raise HTTPException(status_code=403, detail="Permission insuffisante")
-    recipe = Recipe(
+    recipe = await svc_create_recipe(
+        db,
+        owner_id=current_user.id,
         title=payload.title,
         description=payload.description,
         source_url=payload.source_url,
@@ -170,41 +144,12 @@ async def create_recipe(
         difficulty=payload.difficulty,
         cuisine_type=payload.cuisine_type,
         image_url=payload.image_url,
-        is_favorite=False,
         is_public=payload.is_public,
-        owner_id=current_user.id,
         cookbook_id=cookbook_id,
+        ingredients=[ing.model_dump() for ing in payload.ingredients],
+        steps=[step.model_dump() for step in payload.steps],
+        tag_ids=tag_ids,
     )
-    db.add(recipe)
-    await db.flush()
-
-    # Ingredients
-    for ing in payload.ingredients:
-        db.add(
-            RecipeIngredient(
-                recipe_id=recipe.id,
-                name=ing.name,
-                quantity=ing.quantity,
-                unit=ing.unit,
-                note=ing.note,
-                position=ing.position,
-            )
-        )
-    # Etapes
-    for step in payload.steps:
-        db.add(
-            RecipeStep(
-                recipe_id=recipe.id, content=step.content, position=step.position
-            )
-        )
-    # Tags
-    if tag_ids:
-        result = await db.execute(select(Tag).where(Tag.id.in_(tag_ids)))
-        for tag in result.scalars().all():
-            db.add(RecipeTag(recipe_id=recipe.id, tag_id=tag.id))
-
-    await db.commit()
-    await _build_search_vector(recipe.id, db)
     await db.commit()
 
     result = await db.execute(
@@ -359,40 +304,14 @@ async def update_recipe(
     tag_ids = data.pop("tag_ids", None)
     data.pop("is_favorite", None)
 
-    for key, value in data.items():
-        setattr(recipe, key, value)
-
-    if ingredients is not None:
-        # Remplacer
-        for old in list(recipe.ingredients):
-            await db.delete(old)
-        for ing in ingredients:
-            db.add(
-                RecipeIngredient(
-                    recipe_id=recipe.id,
-                    name=ing["name"],
-                    quantity=ing.get("quantity"),
-                    unit=ing.get("unit"),
-                    note=ing.get("note"),
-                    position=ing.get("position", 0),
-                )
-            )
-
-    if steps is not None:
-        for old in list(recipe.steps):
-            await db.delete(old)
-        for s in steps:
-            db.add(
-                RecipeStep(recipe_id=recipe.id, content=s["content"], position=s.get("position", 0))
-            )
-
-    if tag_ids is not None:
-        await db.execute(RecipeTag.__table__.delete().where(RecipeTag.recipe_id == recipe.id))
-        for tid in tag_ids:
-            db.add(RecipeTag(recipe_id=recipe.id, tag_id=tid))
-
-    await db.commit()
-    await _build_search_vector(recipe.id, db)
+    await svc_update_recipe(
+        db,
+        recipe=recipe,
+        fields=data,
+        ingredients=ingredients,
+        steps=steps,
+        tag_ids=tag_ids,
+    )
     await db.commit()
 
     result = await db.execute(

@@ -1,12 +1,17 @@
 """Modele User."""
 
 import enum
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, Enum, String
 from sqlalchemy.orm import relationship
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin
+
+if TYPE_CHECKING:
+    from app.models.cookbook import Cookbook
+    from app.models.recipe import Recipe
 
 
 class UserRole(str, enum.Enum):
