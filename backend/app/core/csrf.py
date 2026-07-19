@@ -13,7 +13,7 @@ ne peut pas envoyer d Authorization custom depuis un autre site.
 from __future__ import annotations
 
 from starlette.responses import JSONResponse
-from starlette.types import ASGIApp, Message, Receive, Scope, Send
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 SKIP_PATH_PREFIXES = ("/api/v1/auth/", "/api/v1/cookbooks/ws/")

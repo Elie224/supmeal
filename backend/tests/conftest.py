@@ -3,10 +3,9 @@
 import asyncio
 import os
 import sys
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 import asyncpg
-import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text

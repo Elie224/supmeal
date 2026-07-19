@@ -1,7 +1,6 @@
 """Endpoints utilisateur : profil, mot de passe, preferences."""
 
 import os
-import re
 import uuid
 from pathlib import Path
 

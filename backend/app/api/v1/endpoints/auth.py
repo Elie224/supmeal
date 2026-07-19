@@ -1,16 +1,16 @@
 """Endpoints d'authentification locale."""
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
 import secrets
+
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import CurrentUser, get_db
 from app.core.config import get_settings as _auth_settings
-from app.core.ratelimit import login_limiter, register_limiter
-from fastapi import Request
-from app.core.security import create_access_token, hash_password, verify_password
+from app.core.deps import CurrentUser, get_db
 from app.core.pwned import is_pwned
+from app.core.ratelimit import login_limiter, register_limiter
+from app.core.security import create_access_token, hash_password, verify_password
 from app.models.user import AuthProvider, User
 from app.schemas.user import (
     LoginRequest,
@@ -143,8 +143,8 @@ async def exchange_oauth_code(payload: dict, db: AsyncSession = Depends(get_db))
     Le navigateur appelle /auth/callback?code=XXX puis POST /auth/exchange{code}.
     Cela evite d avoir le token dans l URL (logs, referrer, historique)."""
     from app.api.v1.endpoints._oauth_codes import consume_code
-    from app.schemas.user import UserRead as _UserRead
     from app.core.security import decode_access_token
+    from app.schemas.user import UserRead as _UserRead
     code = (payload or {}).get("code", "")
     if not code or not isinstance(code, str) or len(code) > 128:
         raise HTTPException(status_code=400, detail="Code invalide")

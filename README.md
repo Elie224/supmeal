@@ -1,5 +1,7 @@
 # SUPMEAL
 
+[![CI](https://github.com/Elie224/supmeal/actions/workflows/ci.yml/badge.svg)](https://github.com/Elie224/supmeal/actions/workflows/ci.yml)
+
 Application web de gestion de recettes et planification de repas, developpee pour la societe SUPMEAL Pro.
 
 Alternative a Mealie, Tandoor Recipes, Paprika : creer, importer, organiser et planifier des recettes de cuisine, seul ou en cookbook partage.
@@ -14,6 +16,9 @@ Alternative a Mealie, Tandoor Recipes, Paprika : creer, importer, organiser et p
 - **Conteneurisation** : Docker + docker-compose
 
 ## Demarrage rapide
+
+> Important : `docker compose up --build` (sans override) demarre seulement l'API et la base.
+> Pour avoir l'application complete (frontend + backend), utilisez explicitement un override.
 
 ### Mode production-like
 
