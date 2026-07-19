@@ -19,7 +19,7 @@
 |   | [   Se connecter   ]                         |   |
 |   |                                              |   |
 |   | -- ou continuer avec --                      |   |
-|   | [G  Google] [GH  GitHub] [M  Microsoft]      |   |
+|   | [G  Google] [GH  GitHub]                     |   |
 |   |                                              |   |
 |   | Pas encore de compte ? Creer un compte       |   |
 |   | Mot de passe oublie ?                        |   |
@@ -134,7 +134,6 @@
 |  Mot de passe   [Changer le mot de passe]            |
 |  Connexions     Google [Connecter]                    |
 |                 GitHub [Connecter]                    |
-|                 Microsoft [Connecter]                 |
 |                                                      |
 |  --- Preferences culinaires ---                      |
 |  Regime        [Aucun v]                             |

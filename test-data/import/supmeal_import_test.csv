@@ -1,0 +1,11 @@
+title,description,servings,prep_time,cook_time,ingredient,quantity,unit,step,tags,source
+Wrap Poulet,Wraps maison proteines,2,15,10,Tortilla,2,piece,,dejeuner,https://example.com/wrap-poulet
+Wrap Poulet,Wraps maison proteines,2,15,10,Poulet cuit,200,g,,dejeuner,https://example.com/wrap-poulet
+Wrap Poulet,Wraps maison proteines,2,15,10,Salade,60,g,,dejeuner,https://example.com/wrap-poulet
+Wrap Poulet,Wraps maison proteines,2,15,10,,,,Emincer le poulet.,dejeuner,https://example.com/wrap-poulet
+Wrap Poulet,Wraps maison proteines,2,15,10,,,,Garnir la tortilla et rouler.,dejeuner,https://example.com/wrap-poulet
+Pates Thon Tomate,Pates rapides du soir,3,10,12,Pates,300,g,,diner,https://example.com/pates-thon-tomate
+Pates Thon Tomate,Pates rapides du soir,3,10,12,Thon,200,g,,diner,https://example.com/pates-thon-tomate
+Pates Thon Tomate,Pates rapides du soir,3,10,12,Sauce tomate,250,ml,,diner,https://example.com/pates-thon-tomate
+Pates Thon Tomate,Pates rapides du soir,3,10,12,,,,Cuire les pates.,diner,https://example.com/pates-thon-tomate
+Pates Thon Tomate,Pates rapides du soir,3,10,12,,,,Melanger avec thon et sauce tomate.,diner,https://example.com/pates-thon-tomate

@@ -24,26 +24,26 @@ build: ## Builder les images
 rebuild: ## Reconstruire le serveur from scratch
 	docker compose down
 	docker volume rm supmeal_pgdata 2>/dev/null || true
-	docker compose build --no-cache server
+	docker compose build --no-cache backend
 	docker compose up -d
 
 clean: ## Arreter et supprimer volumes (PERTE DE DONNEES)
 	docker compose down -v
 
 test: ## Lancer les tests backend
-	cd server && python -m pytest -v
+	docker compose run --rm backend sh -lc "pip install -q pytest pytest-asyncio pytest-cov && python -m pytest -q"
 
 lint: ## Linter Python (ruff)
-	cd server && ruff check app/
+	cd backend && ruff check app/
 
 format: ## Formater le code (ruff)
-	cd server && ruff format app/
+	cd backend && ruff format app/
 
 shell-api: ## Shell dans le conteneur API
-	docker compose exec server bash
+	docker compose exec backend bash
 
 shell-db: ## Console PostgreSQL
 	docker compose exec db psql -U supmeal -d supmeal
 
 seed: ## Creer un utilisateur de demo
-	docker compose exec server python -c "from app.db.session import *; from app.models.user import User, AuthProvider; from app.core.security import hash_password; print('TODO')"
+	docker compose exec backend python -c "from app.db.session import *; from app.models.user import User, AuthProvider; from app.core.security import hash_password; print('TODO')"

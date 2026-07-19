@@ -10,7 +10,7 @@
 ## Se connecter
 
 1. Sur la page de connexion, saisissez votre email et mot de passe.
-2. Vous pouvez aussi utiliser un provider OAuth (Google, GitHub, Microsoft) si l administrateur les a configures.
+2. Vous pouvez aussi utiliser un provider OAuth (Google, GitHub) si l administrateur les a configures.
 
 ## Interface principale
 

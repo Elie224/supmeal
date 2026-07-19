@@ -10,7 +10,7 @@ Documentation interactive : `http://localhost:8765/docs` (Swagger UI)
 | POST | `/auth/register` | Inscription (email, username, password) |
 | POST | `/auth/login` | Connexion, renvoie `{access_token, user}` |
 | GET | `/auth/me` | Profil de l utilisateur connecte |
-| GET | `/auth/oauth/{provider}/login` | Redirige vers Google/GitHub/Microsoft |
+| GET | `/auth/oauth/{provider}/login` | Redirige vers Google/GitHub |
 | GET | `/auth/oauth/{provider}/callback` | Callback OAuth, redirige vers le front avec token |
 
 ## Utilisateurs

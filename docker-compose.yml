@@ -21,11 +21,22 @@ services:
     networks:
       - supmeal-net
 
-  server:
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: supmeal-mailpit
+    restart: unless-stopped
+    profiles: ["dev"]
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    networks:
+      - supmeal-net
+
+  backend:
     build:
-      context: ./server
+      context: ./backend
       dockerfile: Dockerfile
-    container_name: supmeal-server
+    container_name: supmeal-backend
     restart: unless-stopped
     depends_on:
       db:
@@ -48,22 +59,23 @@ services:
     networks:
       - supmeal-net
 
-  web:
+  frontend:
     build:
-      context: ./web
+      context: ./frontend
       dockerfile: Dockerfile
       args:
         VITE_API_URL: http://localhost:8765/api/v1
-    container_name: supmeal-web
+    container_name: supmeal-frontend
     restart: unless-stopped
     depends_on:
-      - server
+      - backend
     ports:
       - "5173:5173"
     environment:
       VITE_API_URL: http://localhost:8765/api/v1
+      VITE_DEV_PROXY_TARGET: http://backend:8765
     volumes:
-      - ./web/src:/app/src
+      - ./frontend/src:/app/src
     networks:
       - supmeal-net
 

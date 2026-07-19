@@ -53,7 +53,7 @@
 
 - JWT stateless : pas de session cote serveur, parfait pour une API REST.
 - bcrypt : algorithme de hash reconnu et resistant aux attaques par force brute.
-- Authlib : librairie de reference pour OAuth2 en Python (Google, GitHub, Microsoft).
+- Authlib : librairie de reference pour OAuth2 en Python (Google, GitHub).
 
 ## WebSocket : natif FastAPI
 

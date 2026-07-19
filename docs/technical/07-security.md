@@ -6,7 +6,7 @@ SUPMEAL suit les bonnes pratiques de securite applicative.
 
 - **Hashage bcrypt** avec 12 rounds (`passlib.context.CryptContext`).
 - Les mots de passe ne sont **jamais** stockes en clair.
-- Les comptes OAuth (Google/GitHub/Microsoft) n ont pas de mot de passe local (`hashed_password = NULL`).
+- Les comptes OAuth (Google/GitHub) n ont pas de mot de passe local (`hashed_password = NULL`).
 - Limite bcrypt 72 octets appliquee via troncature avant hash (compatibilite bcrypt).
 
 ## Authentification
@@ -14,7 +14,8 @@ SUPMEAL suit les bonnes pratiques de securite applicative.
 - JWT signe avec `JWT_SECRET` (variable d environnement obligatoire).
 - Duree de vie configurable (`ACCESS_TOKEN_EXPIRE_MINUTES`, defaut 24h).
 - Le serveur decode le token a chaque requete protegee ; aucune session serveur.
-- Le client stocke le token dans `localStorage` (suffisant pour une SPA avec JWT dans le header).
+- Le serveur pose un cookie httpOnly `supmeal_token` et un cookie CSRF `supmeal_csrf` (pattern double-submit).
+- Le client envoie `X-CSRF-Token` sur les requetes mutantes et peut aussi utiliser `Authorization: Bearer` en fallback de compatibilite.
 
 ## Validation des entrees
 
@@ -41,8 +42,9 @@ SUPMEAL suit les bonnes pratiques de securite applicative.
 
 ## Cookies / CORS
 
-- Pas d utilisation de cookies : le token est dans le header `Authorization` (pas de risque CSRF).
-- `allow_credentials` n est pas necessaire sans cookies.
+- Auth cookie-based en `SameSite=Lax` et `Secure` en production.
+- Protection CSRF active sur POST/PUT/PATCH/DELETE via verification cookie/header.
+- `allow_credentials=true` est necessaire pour transporter les cookies entre front et API.
 
 ## Logs
 

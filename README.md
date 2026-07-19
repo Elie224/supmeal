@@ -9,7 +9,7 @@ Alternative a Mealie, Tandoor Recipes, Paprika : creer, importer, organiser et p
 - **Backend** : Python 3.12, FastAPI, SQLAlchemy 2 (async), Alembic, PostgreSQL 16
 - **Frontend** : React 18, Vite, TypeScript, TailwindCSS, shadcn/ui
 - **Realtime** : WebSocket natif FastAPI (chat cookbook)
-- **Auth** : fastapi-users (local) + OAuth2 (Google, GitHub, Microsoft) via authlib
+- **Auth** : fastapi-users (local) + OAuth2 (Google, GitHub) via authlib
 - **Recherche** : PostgreSQL Full Text Search (tsvector + pg_trgm)
 - **Conteneurisation** : Docker + docker-compose
 
@@ -30,8 +30,8 @@ docker compose up --build
 
 `
 .
-|-- server/          # API FastAPI
-|-- web/             # Client React
+|-- backend/         # API FastAPI
+|-- frontend/        # Client React
 |-- docs/            # Documentation technique + manuel utilisateur
 |-- docker-compose.yml
 `

@@ -22,7 +22,7 @@ SUPMEAL suit une architecture trois tiers stricte :
 
 ## Briques logicielles
 
-### 1. Client Web (`web/`)
+### 1. Client Web (`frontend/`)
 
 - **Framework** : React 18 + Vite + TypeScript.
 - **Routing** : React Router v6.
@@ -33,12 +33,12 @@ SUPMEAL suit une architecture trois tiers stricte :
 
 Aucun secret ni logique metier sur le client : il sert uniquement d interface et delegue tout au serveur.
 
-### 2. Serveur API (`server/`)
+### 2. Serveur API (`backend/`)
 
 - **Framework** : FastAPI (async, OpenAPI auto-genere).
 - **ORM** : SQLAlchemy 2 (async) + Alembic pour les migrations.
 - **Validation** : Pydantic v2 (schemas separes des modeles SQLAlchemy).
-- **Auth** : JWT (passlib + bcrypt + python-jose) ; OAuth2 via Authlib (Google, GitHub, Microsoft).
+- **Auth** : JWT (passlib + bcrypt + python-jose) ; OAuth2 via Authlib (Google, GitHub).
 - **Realtime** : WebSocket natif FastAPI pour le chat cookbook (ConnectionManager par cookbook).
 - **Recherche** : PostgreSQL FTS (`tsvector` + index GIN + extension pg_trgm).
 - **Uploads** : fichiers stockes sur disque dans un volume Docker, servis par `StaticFiles`.
@@ -56,10 +56,10 @@ Aucun secret ni logique metier sur le client : il sert uniquement d interface et
 | Service | Image | Role |
 |---------|-------|------|
 | `db` | postgres:16-alpine | Base de donnees |
-| `server` | python:3.12-slim (build local) | API FastAPI |
-| `web` | node:20-alpine (build local) | Client React (Vite dev server) |
+| `backend` | python:3.12-slim (build local) | API FastAPI |
+| `frontend` | node:20-alpine (build local) | Client React (Vite dev server) |
 
-Le fichier `docker-compose.yml` definit ces services, leurs reseaux et volumes partages. Un healthcheck sur `db` garantit que `server` ne demarre qu une fois la base prete.
+Le fichier `docker-compose.yml` definit ces services, leurs reseaux et volumes partages. Un healthcheck sur `db` garantit que `backend` ne demarre qu une fois la base prete.
 
 ## Flux principaux
 
@@ -68,7 +68,7 @@ Le fichier `docker-compose.yml` definit ces services, leurs reseaux et volumes p
 1. Client envoie `POST /api/v1/auth/register` (ou `/login`).
 2. Serveur hash le mot de passe (bcrypt) et cree un `User` en base.
 3. Serveur genere un JWT (`access_token`) signe avec `JWT_SECRET`.
-4. Client stocke le token et l envoie dans le header `Authorization: Bearer ...` a chaque requete.
+4. Serveur pose un cookie httpOnly `supmeal_token` et un cookie `supmeal_csrf` ; le client envoie `X-CSRF-Token` sur les requetes mutantes (avec fallback `Authorization: Bearer` en compatibilite).
 
 ### Recherche plein texte
 
@@ -79,6 +79,7 @@ Le fichier `docker-compose.yml` definit ces services, leurs reseaux et volumes p
 
 ### Chat cookbook (WebSocket)
 
-1. Client ouvre `ws://server/api/v1/cookbooks/ws/{id}?token=...`.
-2. Serveur valide le token et verifie que l utilisateur est membre.
-3. Chaque message envoye est persiste puis diffuse a tous les clients connectes du meme cookbook.
+1. Client ouvre `ws://server/api/v1/cookbooks/{id}/ws`.
+2. Serveur recupere le JWT via `Sec-WebSocket-Protocol` (`bearer.<token>`) ou via cookie httpOnly.
+3. Serveur valide le token et verifie que l utilisateur est membre.
+4. Chaque message envoye est persiste puis diffuse a tous les clients connectes du meme cookbook.

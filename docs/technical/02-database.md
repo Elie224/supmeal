@@ -31,7 +31,7 @@ users
 | full_name | VARCHAR(120) | |
 | avatar_url | VARCHAR(500) | |
 | hashed_password | VARCHAR(255) | (NULL si OAuth) |
-| auth_provider | ENUM(local, google, github, microsoft) | NOT NULL |
+| auth_provider | ENUM(local, google, github) | NOT NULL |
 | provider_user_id | VARCHAR(255) | (pour lier OAuth) |
 | role | ENUM(user, admin) | NOT NULL |
 | is_active | BOOLEAN | |
