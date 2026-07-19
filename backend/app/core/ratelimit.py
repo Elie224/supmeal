@@ -1,6 +1,7 @@
 from collections import defaultdict
 from time import time
 
+
 class InMemoryRateLimiter:
     def __init__(self, max_requests: int = 5, window_seconds: int = 60):
         self.max_requests = max_requests

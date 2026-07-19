@@ -87,7 +87,6 @@ async def create_recipe(
         difficulty=difficulty,
         cuisine_type=cuisine_type,
         image_url=image_url,
-        is_favorite=False,
         is_public=is_public,
         owner_id=owner_id,
         cookbook_id=cookbook_id,

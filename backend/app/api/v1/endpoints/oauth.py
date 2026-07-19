@@ -129,7 +129,7 @@ async def oauth_callback(provider: str, request: Request, db: AsyncSession = Dep
     try:
         token = await client.authorize_access_token(request)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Echec OAuth: {e}")
+        raise HTTPException(status_code=400, detail=f"Echec OAuth: {e}") from e
 
     # Recuperer infos utilisateur selon le provider
     if provider == "google":
@@ -162,6 +162,7 @@ async def oauth_callback(provider: str, request: Request, db: AsyncSession = Dep
     # via un cookie httpOnly + un echange serveur (voir /auth/exchange).
     # En attendant un echange complet, on renvoie un code opaque a usage unique.
     import secrets
+
     from app.api.v1.endpoints._oauth_codes import store_code  # type: ignore
     code = secrets.token_urlsafe(32)
     store_code(code, access_token, ttl=60)

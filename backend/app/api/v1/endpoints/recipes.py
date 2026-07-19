@@ -3,40 +3,34 @@
 import os
 import uuid
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated
 
 from fastapi import (
     APIRouter,
     Depends,
     File,
-    Form,
     HTTPException,
     Query,
     UploadFile,
     status,
 )
 from sqlalchemy import and_, func, or_, select
-from sqlalchemy.dialects.postgresql import TSVECTOR
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.config import get_settings
+from app.core.deps import CurrentUser, _get_optional_user, get_db
 from app.core.security_utils import safe_image_extension, sniff_image
-from app.core.deps import CurrentUser, get_db, _get_optional_user
 from app.models.cookbook import CookbookMember, CookbookRole
-from app.models.user import User
 from app.models.recipe import (
     Comment,
     Recipe,
     RecipeFavorite,
     RecipeIngredient,
-    RecipeStep,
     RecipeTag,
     Tag,
 )
-from app.services.recipe_service import create_recipe as svc_create_recipe
-from app.services.recipe_service import update_recipe as svc_update_recipe
+from app.models.user import User
 from app.schemas.recipe import (
     CommentCreate,
     CommentRead,
@@ -45,6 +39,8 @@ from app.schemas.recipe import (
     RecipeSummary,
     RecipeUpdate,
 )
+from app.services.recipe_service import create_recipe as svc_create_recipe
+from app.services.recipe_service import update_recipe as svc_update_recipe
 
 router = APIRouter()
 settings = get_settings()
@@ -162,14 +158,14 @@ async def create_recipe(
         .where(Recipe.id == recipe.id)
     )
     recipe_out = result.scalar_one()
-    setattr(recipe_out, "_is_favorite", False)
+    recipe_out._is_favorite = False
     return _recipe_to_read(recipe_out)
 
 
 @router.get("", response_model=list[RecipeSummary])
 async def list_recipes(
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(_get_optional_user),
+    current_user: User | None = Depends(_get_optional_user),
     cookbook_id: int | None = None,
     tag_ids: Annotated[list[int] | None, Query()] = None,
     tag_category: str | None = None,
@@ -207,13 +203,24 @@ async def list_recipes(
         conditions.append(Recipe.cook_time_minutes <= max_cook_time)
 
     if ingredient:
-        # Utilise trigram pour recherche floue + insensible a la casse
+        # Recherche ingredient insensible a la casse
         ingredient_subq = (
             select(RecipeIngredient.recipe_id)
             .where(RecipeIngredient.name.ilike(f"%{ingredient}%"))
             .distinct()
         )
         conditions.append(Recipe.id.in_(ingredient_subq))
+
+    if favorites_only:
+        if not current_user:
+            return []
+        stmt = stmt.join(
+            RecipeFavorite,
+            and_(
+                RecipeFavorite.recipe_id == Recipe.id,
+                RecipeFavorite.user_id == current_user.id,
+            ),
+        )
 
     if tag_ids:
         for tid in tag_ids:
@@ -246,17 +253,18 @@ async def list_recipes(
     recipes = result.scalars().unique().all()
     favorite_ids: set[int] = set()
     if current_user:
-        favorite_ids = await _favorite_recipe_ids(db, current_user.id, [r.id for r in recipes])
-    if favorites_only:
-        recipes = [r for r in recipes if r.id in favorite_ids]
+        if favorites_only:
+            favorite_ids = {r.id for r in recipes}
+        else:
+            favorite_ids = await _favorite_recipe_ids(db, current_user.id, [r.id for r in recipes])
     for r in recipes:
-        setattr(r, "_is_favorite", r.id in favorite_ids)
+        r._is_favorite = r.id in favorite_ids
     return [_recipe_to_summary(r) for r in recipes]
 
 
 @router.get("/{recipe_id}", response_model=RecipeRead)
 async def get_recipe(
-    recipe_id: int, db: AsyncSession = Depends(get_db), current_user: Optional[User] = Depends(_get_optional_user)
+    recipe_id: int, db: AsyncSession = Depends(get_db), current_user: User | None = Depends(_get_optional_user)
 ) -> RecipeRead:
     result = await db.execute(
         select(Recipe)
@@ -278,9 +286,9 @@ async def get_recipe(
                 (RecipeFavorite.user_id == current_user.id) & (RecipeFavorite.recipe_id == recipe.id)
             )
         )
-        setattr(recipe, "_is_favorite", fav_result.scalar_one_or_none() is not None)
+        recipe._is_favorite = fav_result.scalar_one_or_none() is not None
     else:
-        setattr(recipe, "_is_favorite", False)
+        recipe._is_favorite = False
     return _recipe_to_read(recipe)
 
 
@@ -329,7 +337,7 @@ async def update_recipe(
             (RecipeFavorite.user_id == current_user.id) & (RecipeFavorite.recipe_id == recipe_out.id)
         )
     )
-    setattr(recipe_out, "_is_favorite", fav_result.scalar_one_or_none() is not None)
+    recipe_out._is_favorite = fav_result.scalar_one_or_none() is not None
     return _recipe_to_read(recipe_out)
 
 
@@ -366,10 +374,10 @@ async def toggle_favorite(
     existing = existing_result.scalar_one_or_none()
     if existing:
         await db.delete(existing)
-        setattr(recipe, "_is_favorite", False)
+        recipe._is_favorite = False
     else:
         db.add(RecipeFavorite(user_id=current_user.id, recipe_id=recipe.id))
-        setattr(recipe, "_is_favorite", True)
+        recipe._is_favorite = True
 
     await db.commit()
     await db.refresh(recipe)
@@ -456,7 +464,7 @@ async def add_comment(
 async def list_comments(
     recipe_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(_get_optional_user),
+    current_user: User | None = Depends(_get_optional_user),
 ) -> list[CommentRead]:
     recipe_result = await db.execute(select(Recipe).where(Recipe.id == recipe_id))
     recipe = recipe_result.scalar_one_or_none()

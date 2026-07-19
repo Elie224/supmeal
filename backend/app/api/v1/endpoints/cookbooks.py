@@ -9,7 +9,6 @@ from fastapi import (
     Depends,
     HTTPException,
     Query,
-    WebSocket,
     WebSocketDisconnect,
     status,
 )
@@ -26,8 +25,7 @@ from app.models.cookbook import (
     CookbookRole,
     InvitationStatus,
 )
-from app.models.recipe import Recipe
-from app.models.recipe import RecipeFavorite, RecipeIngredient
+from app.models.recipe import Recipe, RecipeFavorite
 from app.models.user import User
 from app.schemas.cookbook import (
     AddMemberRequest,
@@ -43,8 +41,8 @@ from app.schemas.cookbook import (
 )
 from app.schemas.recipe import RecipeCreate, RecipeRead
 from app.schemas.user import UserPublic
-from app.services.recipe_service import create_recipe as svc_create_recipe
 from app.services.connection_manager import manager
+from app.services.recipe_service import create_recipe as svc_create_recipe
 
 router = APIRouter()
 
@@ -335,12 +333,38 @@ async def list_invitations(
     return [CookbookInvitationRead.model_validate(i) for i in result.scalars().all()]
 
 
+@router.delete("/{cookbook_id}/invitations/{invitation_id}", status_code=204)
+async def revoke_invitation(
+    cookbook_id: int,
+    invitation_id: int,
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    role = await _get_member_role(db, cookbook_id, current_user.id)
+    if role != CookbookRole.CREATOR:
+        raise HTTPException(status_code=403, detail="Reserve au createur")
+
+    result = await db.execute(
+        select(CookbookInvitation).where(
+            (CookbookInvitation.id == invitation_id)
+            & (CookbookInvitation.cookbook_id == cookbook_id)
+        )
+    )
+    invitation = result.scalar_one_or_none()
+    if not invitation:
+        raise HTTPException(status_code=404, detail="Invitation introuvable")
+
+    if invitation.status == InvitationStatus.PENDING:
+        invitation.status = InvitationStatus.REVOKED
+        await db.commit()
+
+
 @router.post("/invitations/{token}/accept", status_code=200)
 async def accept_invitation(
     token: str,
     current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
-) -> dict[str, str]:
+) -> dict[str, int | str]:
     result = await db.execute(select(CookbookInvitation).where(CookbookInvitation.token == token))
     invitation = result.scalar_one_or_none()
     if not invitation:
@@ -370,7 +394,10 @@ async def accept_invitation(
 
     invitation.status = InvitationStatus.ACCEPTED
     await db.commit()
-    return {"detail": "Invitation acceptee"}
+    return {
+        "detail": "Invitation acceptee",
+        "cookbook_id": invitation.cookbook_id,
+    }
 
 
 # ---------- Recettes du cookbook ----------
@@ -429,6 +456,14 @@ async def list_cookbook_recipes(
             RecipeIngredient.name.ilike(f"%{ingredient}%")
         )
         stmt = stmt.where(Recipe.id.in_(ing_subq))
+    if favorites_only:
+        stmt = stmt.join(
+            RecipeFavorite,
+            and_(
+                RecipeFavorite.recipe_id == Recipe.id,
+                RecipeFavorite.user_id == current_user.id,
+            ),
+        )
     if max_prep_time is not None:
         stmt = stmt.where(Recipe.prep_time_minutes <= max_prep_time)
     stmt = stmt.order_by(Recipe.updated_at.desc()).offset(skip).limit(limit)
@@ -446,7 +481,7 @@ async def list_cookbook_recipes(
         favorite_ids = set(fav_result.scalars().all())
 
     if favorites_only:
-        recipes = [r for r in recipes if r.id in favorite_ids]
+        favorite_ids = {r.id for r in recipes}
 
     return [_recipe_read_with_user_favorite(r, r.id in favorite_ids) for r in recipes]
 
@@ -620,7 +655,7 @@ async def websocket_chat(websocket, cookbook_id: str):
     user_id = int(payload["sub"])
 
     # 4) Rate limit par user
-    from app.core.ratelimit import ws_limiter, message_limiter
+    from app.core.ratelimit import message_limiter, ws_limiter
     if not ws_limiter.is_allowed(str(user_id)):
         await websocket.close(code=4429)
         return

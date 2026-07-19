@@ -3,10 +3,11 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import (
+    field_validator,
+    model_validator,  # noqa: E402
+)
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
-from pydantic import model_validator  # noqa: E402
 
 
 class Settings(BaseSettings):

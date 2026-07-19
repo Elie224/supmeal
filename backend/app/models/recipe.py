@@ -1,17 +1,14 @@
 """Modele Recipe et structures associees (ingredients, etapes, tags)."""
 
-import enum
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     Boolean,
-    Enum,
     ForeignKey,
     Index,
     Integer,
     String,
     Text,
-    UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -40,7 +37,6 @@ class Recipe(Base, TimestampMixin):
 
     image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
-    is_favorite: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_public: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     # Proprietaire (null si recette dans un cookbook seulement)

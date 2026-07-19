@@ -1,6 +1,5 @@
 """Dependances partagees : DB, utilisateur courant, etc."""
 
-from collections.abc import AsyncGenerator
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status

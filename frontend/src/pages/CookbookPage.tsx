@@ -5,7 +5,7 @@ import { Plus, Search, Send, Trash2, UserPlus } from "lucide-react";
 import { api } from "../lib/api";
 import { useAuthStore } from "../stores/auth";
 import RecipeCard from "../components/RecipeCard";
-import type { Cookbook, Message, Recipe, Tag } from "../lib/types";
+import type { Cookbook, CookbookInvitation, Message, Recipe, Tag } from "../lib/types";
 
 type Tab = "recipes" | "members" | "discussion" | "settings";
 
@@ -23,6 +23,7 @@ export default function CookbookPage() {
   const [tagCategoryFilter, setTagCategoryFilter] = useState<string>("");
   const [msgContent, setMsgContent] = useState("");
   const [newMember, setNewMember] = useState({ email: "", role: "reader" });
+  const [lastInviteLink, setLastInviteLink] = useState<string | null>(null);
   const [showCreateRecipe, setShowCreateRecipe] = useState(false);
   const [newRecipe, setNewRecipe] = useState({
     title: "",
@@ -74,6 +75,12 @@ export default function CookbookPage() {
     refetchInterval: tab === "discussion" ? 4000 : false,
   });
 
+  const invitationsQ = useQuery({
+    queryKey: ["cookbook-invitations", id],
+    queryFn: async () => (await api.get<CookbookInvitation[]>(`/cookbooks/${id}/invitations`, { params: { only_pending: true } })).data,
+    enabled: !!id && tab === "members",
+  });
+
   useEffect(() => {
     if (tab === "discussion" && id) {
       const token = localStorage.getItem("supmeal_token");
@@ -111,12 +118,19 @@ export default function CookbookPage() {
     mutationFn: async (content: string) => (await api.post(`/cookbooks/${id}/messages`, { content })).data,
   });
 
-  const addMember = useMutation({
-    mutationFn: async () => (await api.post(`/cookbooks/${id}/members`, { user_email: newMember.email, role: newMember.role })).data,
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["cookbook", id] });
+  const createInvitation = useMutation({
+    mutationFn: async () => (await api.post<CookbookInvitation>(`/cookbooks/${id}/invitations`, { invited_email: newMember.email, invited_role: newMember.role })).data,
+    onSuccess: (invitation) => {
+      qc.invalidateQueries({ queryKey: ["cookbook-invitations", id] });
+      const inviteLink = `${window.location.origin}/invitations/${invitation.token}`;
+      setLastInviteLink(inviteLink);
       setNewMember({ email: "", role: "reader" });
     },
+  });
+
+  const revokeInvitation = useMutation({
+    mutationFn: async (invitationId: number) => (await api.delete(`/cookbooks/${id}/invitations/${invitationId}`)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["cookbook-invitations", id] }),
   });
 
   const updateMemberRole = useMutation({
@@ -422,7 +436,7 @@ export default function CookbookPage() {
             </div>
           </div>
           {isCreator && (
-            <form onSubmit={(e) => { e.preventDefault(); addMember.mutate(); }} className="card p-4 space-y-3">
+            <form onSubmit={(e) => { e.preventDefault(); createInvitation.mutate(); }} className="card p-4 space-y-3">
               <h3 className="font-display font-semibold">Inviter un membre</h3>
               <div className="flex gap-2">
                 <input className="input flex-1" type="email" placeholder="Email de l'utilisateur" value={newMember.email} onChange={(e) => setNewMember({ ...newMember, email: e.target.value })} required />
@@ -431,10 +445,55 @@ export default function CookbookPage() {
                   <option value="commentator">Commentateur</option>
                   <option value="editor">Editeur</option>
                 </select>
-                <button type="submit" className="btn-primary">
-                  <UserPlus className="w-4 h-4" /> Inviter
+                <button type="submit" className="btn-primary" disabled={createInvitation.isPending}>
+                  <UserPlus className="w-4 h-4" /> {createInvitation.isPending ? "Generation..." : "Inviter"}
                 </button>
               </div>
+              {lastInviteLink && (
+                <div className="rounded-xl border border-cream-300 bg-cream-50 p-3 text-xs text-charcoal-700 flex items-center justify-between gap-2">
+                  <span className="truncate">Lien d invitation: {lastInviteLink}</span>
+                  <button
+                    type="button"
+                    className="btn-outline"
+                    onClick={() => void navigator.clipboard.writeText(lastInviteLink)}
+                  >
+                    Copier
+                  </button>
+                </div>
+              )}
+              {invitationsQ.data && invitationsQ.data.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold text-charcoal-800">Invitations en attente</h4>
+                  {invitationsQ.data.map((inv) => {
+                    const inviteLink = `${window.location.origin}/invitations/${inv.token}`;
+                    return (
+                      <div key={inv.id} className="rounded-xl border border-cream-200 p-3 text-xs flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="font-medium text-charcoal-900">{inv.invited_email} ({inv.invited_role})</div>
+                          <div className="text-charcoal-500 truncate">{inviteLink}</div>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            className="btn-outline"
+                            onClick={() => void navigator.clipboard.writeText(inviteLink)}
+                          >
+                            Copier
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-outline text-red-600"
+                            onClick={() => revokeInvitation.mutate(inv.id)}
+                            disabled={revokeInvitation.isPending}
+                          >
+                            Revoquer
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </form>
           )}
           {!isCreator && user?.id && (

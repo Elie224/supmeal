@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from app.models.user import User
 
 
-class CookbookRole(str, enum.Enum):
+class CookbookRole(enum.StrEnum):
     """Role d'un membre dans un cookbook partage.
 
     - CREATOR: createur, tous les droits dont suppression du cookbook
@@ -29,7 +29,7 @@ class CookbookRole(str, enum.Enum):
     READER = "reader"
 
 
-class InvitationStatus(str, enum.Enum):
+class InvitationStatus(enum.StrEnum):
     PENDING = "pending"
     ACCEPTED = "accepted"
     EXPIRED = "expired"

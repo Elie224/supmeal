@@ -6,20 +6,19 @@ import json
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from pydantic import ValidationError
 from fastapi.responses import StreamingResponse
+from pydantic import ValidationError
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.deps import CurrentUser, get_db
+from app.core.security_utils import sanitize_csv_cell
 from app.models.cookbook import Cookbook, CookbookMember, CookbookRole
 from app.models.recipe import (
     Recipe,
 )
-from app.schemas.recipe import RecipeRead
 from app.schemas.import_export import MealieImportPayload, SupmealImportPayload
-from app.core.security_utils import sanitize_csv_cell
 from app.services.import_export import mealie_to_recipe, recipe_to_dict
 from app.services.recipe_service import create_recipe as svc_create_recipe
 
@@ -31,8 +30,8 @@ def _parse_int(value: Any, field_name: str, default: int) -> int:
         return default
     try:
         return int(value)
-    except (TypeError, ValueError):
-        raise HTTPException(status_code=400, detail=f"Valeur invalide pour {field_name}: {value}")
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=f"Valeur invalide pour {field_name}: {value}") from exc
 
 
 def _parse_float(value: Any, field_name: str) -> float | None:
@@ -41,8 +40,8 @@ def _parse_float(value: Any, field_name: str) -> float | None:
     normalized = str(value).strip().replace(",", ".")
     try:
         return float(normalized)
-    except (TypeError, ValueError):
-        raise HTTPException(status_code=400, detail=f"Valeur invalide pour {field_name}: {value}")
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=f"Valeur invalide pour {field_name}: {value}") from exc
 
 
 # ---------- Export ----------
@@ -166,14 +165,14 @@ async def import_json(
 ) -> dict[str, int]:
     """Importe un JSON SUPMEAL ou compatible Mealie."""
     # Anti-DoS : limite a 5 MB pour l import JSON
-    MAX_IMPORT_SIZE = 5 * 1024 * 1024
-    content = await file.read(MAX_IMPORT_SIZE + 1)
-    if len(content) > MAX_IMPORT_SIZE:
+    max_import_size = 5 * 1024 * 1024
+    content = await file.read(max_import_size + 1)
+    if len(content) > max_import_size:
         raise HTTPException(status_code=413, detail="Fichier d import trop volumineux (max 5 MB)")
     try:
         data = json.loads(content)
     except json.JSONDecodeError as e:
-        raise HTTPException(status_code=400, detail=f"JSON invalide: {e}")
+        raise HTTPException(status_code=400, detail=f"JSON invalide: {e}") from e
 
     fmt = data.get("format", "supmeal-json")
     recipes: list[dict[str, Any]] = []
@@ -183,7 +182,7 @@ async def import_json(
         if fmt == "mealie":
             validated = MealieImportPayload.model_validate(data)
             recipes = [
-                mealie_to_recipe(recipe.model_dump(mode="json"))
+                mealie_to_recipe(recipe.model_dump(mode="json", by_alias=True))
                 for recipe in validated.recipes
             ]
         else:
@@ -191,29 +190,36 @@ async def import_json(
             recipes = [recipe.model_dump(mode="json") for recipe in validated.recipes]
             cookbooks_payload = [cookbook.model_dump(mode="json") for cookbook in validated.cookbooks]
     except ValidationError as exc:
-        raise HTTPException(status_code=422, detail=exc.errors())
+        raise HTTPException(status_code=422, detail=exc.errors()) from exc
 
     count = 0
-    for r in recipes:
-        await _create_recipe_from_dict(db, current_user.id, r)
-        count += 1
-
-    # Cookbooks (uniquement format supmeal-json)
-    for cb in cookbooks_payload:
-        cb_obj = Cookbook(
-            name=cb["name"],
-            description=cb.get("description"),
-            owner_id=current_user.id,
-        )
-        db.add(cb_obj)
-        await db.flush()
-        db.add(
-            CookbookMember(cookbook_id=cb_obj.id, user_id=current_user.id, role=CookbookRole.CREATOR)
-        )
-        for r in cb.get("recipes", []):
-            await _create_recipe_from_dict(db, current_user.id, r, cookbook_id=cb_obj.id)
+    try:
+        for r in recipes:
+            await _create_recipe_from_dict(db, current_user.id, r)
             count += 1
-    await db.commit()
+
+        # Cookbooks (uniquement format supmeal-json)
+        for cb in cookbooks_payload:
+            cb_obj = Cookbook(
+                name=cb["name"],
+                description=cb.get("description"),
+                owner_id=current_user.id,
+            )
+            db.add(cb_obj)
+            await db.flush()
+            db.add(
+                CookbookMember(cookbook_id=cb_obj.id, user_id=current_user.id, role=CookbookRole.CREATOR)
+            )
+            for r in cb.get("recipes", []):
+                await _create_recipe_from_dict(db, current_user.id, r, cookbook_id=cb_obj.id)
+                count += 1
+        await db.commit()
+    except HTTPException:
+        await db.rollback()
+        raise
+    except Exception as exc:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail="Echec inattendu pendant l'import JSON") from exc
     return {"imported_recipes": count}
 
 
@@ -224,9 +230,9 @@ async def import_csv(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """Importe un CSV. Le regroupement par titre est automatique."""
-    MAX_IMPORT_SIZE = 5 * 1024 * 1024
-    raw = await file.read(MAX_IMPORT_SIZE + 1)
-    if len(raw) > MAX_IMPORT_SIZE:
+    max_import_size = 5 * 1024 * 1024
+    raw = await file.read(max_import_size + 1)
+    if len(raw) > max_import_size:
         raise HTTPException(status_code=413, detail="Fichier d import trop volumineux (max 5 MB)")
     content = raw.decode("utf-8", errors="ignore")
     reader = csv.DictReader(io.StringIO(content))
@@ -275,10 +281,17 @@ async def import_csv(
                 }
             )
     count = 0
-    for r in by_title.values():
-        await _create_recipe_from_dict(db, current_user.id, r)
-        count += 1
-    await db.commit()
+    try:
+        for r in by_title.values():
+            await _create_recipe_from_dict(db, current_user.id, r)
+            count += 1
+        await db.commit()
+    except HTTPException:
+        await db.rollback()
+        raise
+    except Exception as exc:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail="Echec inattendu pendant l'import CSV") from exc
     return {
         "imported_recipes": count,
         "ignored_rows": ignored_rows,
@@ -305,10 +318,7 @@ async def _create_recipe_from_dict(
 
     steps: list[dict[str, Any]] = []
     for i, step in enumerate(data.get("steps", [])):
-        if isinstance(step, dict):
-            content = step.get("content", "")
-        else:
-            content = str(step)
+        content = step.get("content", "") if isinstance(step, dict) else str(step)
         steps.append({"content": content, "position": i})
 
     return await svc_create_recipe(
