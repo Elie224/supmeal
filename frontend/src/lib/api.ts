@@ -47,7 +47,6 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       // Purge local + redirection
       localStorage.removeItem("supmeal_token");
-      localStorage.removeItem("supmeal_user");
       if (!window.location.pathname.startsWith("/login")) {
         window.location.href = "/login";
       }

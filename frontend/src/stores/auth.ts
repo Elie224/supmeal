@@ -32,11 +32,9 @@ export const useAuthStore = create<AuthState>()(
         // preserve previous role if not provided
         const prev = useAuthStore.getState().user;
         const merged = prev?.role && !user.role ? { ...user, role: prev.role } : user;
-        localStorage.setItem("supmeal_user", JSON.stringify(merged));
         set({ isAuthenticated: true, authStatus: "authenticated", user: merged });
       },
       clear: () => {
-        localStorage.removeItem("supmeal_user");
         localStorage.removeItem("supmeal_token");
         set({ isAuthenticated: false, authStatus: "anonymous", user: null });
       },
@@ -58,7 +56,6 @@ export const useAuthStore = create<AuthState>()(
               role: data.role,
             },
           });
-          localStorage.setItem("supmeal_user", JSON.stringify(data));
         } catch {
           set({ isAuthenticated: false, authStatus: "anonymous", user: null });
         }

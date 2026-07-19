@@ -13,6 +13,7 @@ import ShoppingPage from "./pages/ShoppingPage";
 import SettingsPage from "./pages/SettingsPage";
 import OAuthCallbackPage from "./pages/OAuthCallbackPage";
 import AdminPage from "./pages/AdminPage";
+import InvitationAcceptPage from "./pages/InvitationAcceptPage";
 import { type ReactElement } from "react";
 import { useEffect } from "react";
 
@@ -52,6 +53,7 @@ export default function App() {
         <Route path="recipes/new" element={<RecipeEditPage />} />
         <Route path="cookbooks" element={<CookbooksPage />} />
         <Route path="cookbooks/:id" element={<CookbookPage />} />
+        <Route path="invitations/:token" element={<InvitationAcceptPage />} />
         <Route path="planning" element={<MealPlanPage />} />
         <Route path="shopping" element={<ShoppingPage />} />
         <Route path="settings" element={<SettingsPage />} />
