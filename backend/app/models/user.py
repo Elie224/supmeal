@@ -1,11 +1,12 @@
 """Modele User."""
 
+from __future__ import annotations
+
 import enum
 from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, Enum, String
-from sqlalchemy.orm import relationship
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin
 
@@ -14,12 +15,12 @@ if TYPE_CHECKING:
     from app.models.recipe import Recipe
 
 
-class UserRole(str, enum.Enum):
+class UserRole(enum.StrEnum):
     USER = "user"
     ADMIN = "admin"
 
 
-class AuthProvider(str, enum.Enum):
+class AuthProvider(enum.StrEnum):
     LOCAL = "local"
     GOOGLE = "google"
     GITHUB = "github"
@@ -57,9 +58,9 @@ class User(Base, TimestampMixin):
     default_servings: Mapped[int] = mapped_column(default=4, nullable=False)
 
     # Relations
-    recipes: Mapped[list["Recipe"]] = relationship(
+    recipes: Mapped[list[Recipe]] = relationship(
         "Recipe", back_populates="owner", cascade="all, delete-orphan", lazy="noload"
     )
-    owned_cookbooks: Mapped[list["Cookbook"]] = relationship(
+    owned_cookbooks: Mapped[list[Cookbook]] = relationship(
         "Cookbook", back_populates="owner", cascade="all, delete-orphan", lazy="noload"
     )

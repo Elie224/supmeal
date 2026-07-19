@@ -3,8 +3,7 @@
 Proteges par le role UserRole.ADMIN (defini dans app.models.user).
 """
 
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict
@@ -39,7 +38,7 @@ async def get_stats(
     db: AsyncSession = Depends(get_db), _: User = AdminUser
 ) -> dict:
     """Statistiques globales de l application (admin uniquement)."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     last_7d = now - timedelta(days=7)
     last_30d = now - timedelta(days=30)
 
@@ -114,8 +113,8 @@ async def get_stats(
 class AdminUserRead(BaseModel):
     id: int
     username: str
-    full_name: Optional[str] = None
-    avatar_url: Optional[str] = None
+    full_name: str | None = None
+    avatar_url: str | None = None
     email: str
     role: UserRole
     auth_provider: str
@@ -132,9 +131,9 @@ class AdminUserRead(BaseModel):
 async def list_all_users(
     db: AsyncSession = Depends(get_db),
     _: User = AdminUser,
-    q: Optional[str] = None,
-    role: Optional[UserRole] = None,
-    is_active: Optional[bool] = None,
+    q: str | None = None,
+    role: UserRole | None = None,
+    is_active: bool | None = None,
     skip: int = Query(0, ge=0, le=10000),
     limit: int = Query(50, ge=1, le=200),
 ) -> list[AdminUserRead]:
@@ -272,13 +271,12 @@ async def delete_user(
 class AdminRecipeSummary(BaseModel):
     id: int
     title: str
-    description: Optional[str] = None
-    image_url: Optional[str] = None
-    owner_id: Optional[int] = None
-    owner_username: Optional[str] = None
-    cookbook_id: Optional[int] = None
+    description: str | None = None
+    image_url: str | None = None
+    owner_id: int | None = None
+    owner_username: str | None = None
+    cookbook_id: int | None = None
     is_public: bool
-    is_favorite: bool
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -288,9 +286,9 @@ class AdminRecipeSummary(BaseModel):
 async def list_all_recipes(
     db: AsyncSession = Depends(get_db),
     _: User = AdminUser,
-    q: Optional[str] = None,
-    owner_id: Optional[int] = None,
-    is_public: Optional[bool] = None,
+    q: str | None = None,
+    owner_id: int | None = None,
+    is_public: bool | None = None,
     skip: int = Query(0, ge=0, le=10000),
     limit: int = Query(50, ge=1, le=200),
 ) -> list[AdminRecipeSummary]:
@@ -323,7 +321,6 @@ async def list_all_recipes(
             owner_username=owners.get(r.owner_id) if r.owner_id else None,
             cookbook_id=r.cookbook_id,
             is_public=r.is_public,
-            is_favorite=r.is_favorite,
             created_at=r.created_at,
         )
         for r in recipes

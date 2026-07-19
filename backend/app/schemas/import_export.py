@@ -72,15 +72,17 @@ class MealieTag(BaseModel):
 
 
 class MealieRecipe(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     name: str | None = None
     description: str | None = None
-    orgURL: HttpUrl | None = None
-    prepTime: str | int | None = None
-    cookTime: str | int | None = None
-    recipeServings: int | None = Field(default=None, ge=1, le=50)
+    org_url: HttpUrl | None = Field(default=None, alias="orgURL")
+    prep_time: str | int | None = Field(default=None, alias="prepTime")
+    cook_time: str | int | None = Field(default=None, alias="cookTime")
+    recipe_servings: int | None = Field(default=None, ge=1, le=50, alias="recipeServings")
     image: HttpUrl | None = None
-    recipeIngredient: list[MealieIngredient] = Field(default_factory=list)
-    recipeInstructions: list[MealieInstruction] = Field(default_factory=list)
+    recipe_ingredient: list[MealieIngredient] = Field(default_factory=list, alias="recipeIngredient")
+    recipe_instructions: list[MealieInstruction] = Field(default_factory=list, alias="recipeInstructions")
     tags: list[MealieTag] = Field(default_factory=list)
 
 

@@ -3,16 +3,32 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from starlette.middleware.sessions import SessionMiddleware
-from starlette.responses import Response
 from starlette.staticfiles import StaticFiles as _StaticFiles
+from starlette.websockets import WebSocket as _WebSocket
+from starlette.websockets import WebSocketDisconnect as _WebSocketDisconnect
 
+from app.api.v1.endpoints.cookbooks import (
+    _ALLOWED_WS_ORIGINS,
+    _extract_ws_token,
+    _get_member_role_ws,
+)
 from app.api.v1.router import api_router
 from app.core.config import get_settings
 from app.core.csrf import CSRFMiddleware
+from app.core.ratelimit import general_limiter, import_limiter, upload_limiter
+from app.core.ratelimit import message_limiter as _msg_limiter
+from app.core.ratelimit import ws_limiter as _ws_limiter
+from app.core.security import decode_access_token as _decode
+from app.db.session import AsyncSessionLocal as _AsyncSessionLocal2
 from app.db.session import engine
+from app.models.cookbook import CookbookMessage
+from app.models.user import User as _User2
+from app.schemas.user import UserPublic as _UserPublic2
+from app.services.connection_manager import manager as _manager
 
 settings = get_settings()
 
@@ -87,9 +103,6 @@ async def security_headers_middleware(request, call_next):
     return response
 
 
-from app.core.ratelimit import general_limiter, import_limiter, upload_limiter
-
-
 @app.middleware("http")
 async def rate_limit_middleware(request, call_next):
     """Rate limit global + specifiques par chemin sensible."""
@@ -101,20 +114,14 @@ async def rate_limit_middleware(request, call_next):
     method = request.method
 
     # Endpoints sensibles
-    if path.startswith("/api/v1/import-export") and method == "POST":
-        if not import_limiter.is_allowed(client_ip):
-            from fastapi.responses import JSONResponse
-            return JSONResponse(status_code=429, content={"detail": "Trop d imports. Reessayez plus tard."})
-    if "/image" in path or "/avatar" in path:
-        if not upload_limiter.is_allowed(client_ip):
-            from fastapi.responses import JSONResponse
-            return JSONResponse(status_code=429, content={"detail": "Trop d uploads. Reessayez plus tard."})
+    if path.startswith("/api/v1/import-export") and method == "POST" and not import_limiter.is_allowed(client_ip):
+        return JSONResponse(status_code=429, content={"detail": "Trop d imports. Reessayez plus tard."})
+    if ("/image" in path or "/avatar" in path) and not upload_limiter.is_allowed(client_ip):
+        return JSONResponse(status_code=429, content={"detail": "Trop d uploads. Reessayez plus tard."})
 
     # General (toutes les routes /api/*)
-    if path.startswith("/api/"):
-        if not general_limiter.is_allowed(client_ip):
-            from fastapi.responses import JSONResponse
-            return JSONResponse(status_code=429, content={"detail": "Trop de requetes. Reessayez plus tard."})
+    if path.startswith("/api/") and not general_limiter.is_allowed(client_ip):
+        return JSONResponse(status_code=429, content={"detail": "Trop de requetes. Reessayez plus tard."})
 
     return await call_next(request)
 
@@ -148,22 +155,7 @@ class CachedStaticFiles(_StaticFiles):
 
 app.mount("/uploads", CachedStaticFiles(directory=settings.upload_dir), name="uploads")
 
-
-
 # ---------- WebSocket (declare au niveau app pour eviter le bug FastAPI 0.115+ sur les WS routes) ----------
-import sys as _sys
-from starlette.websockets import WebSocket as _WebSocket
-from starlette.websockets import WebSocketDisconnect as _WebSocketDisconnect
-from app.api.v1.endpoints.cookbooks import _extract_ws_token, _get_member_role_ws, _ALLOWED_WS_ORIGINS
-from app.services.connection_manager import manager as _manager
-from app.db.session import AsyncSessionLocal as _AsyncSessionLocal2
-from app.models.cookbook import CookbookMessage, CookbookRole as _CookbookRole
-from app.models.user import User as _User2
-from app.schemas.user import UserPublic as _UserPublic2
-from app.core.security import decode_access_token as _decode
-from app.core.ratelimit import ws_limiter as _ws_limiter, message_limiter as _msg_limiter
-
-
 @app.websocket("/api/v1/cookbooks/{cookbook_id}/ws")
 async def app_websocket_chat(websocket: _WebSocket, cookbook_id: str):
     await websocket.accept()
@@ -190,7 +182,7 @@ async def app_websocket_chat(websocket: _WebSocket, cookbook_id: str):
         return
     async with _AsyncSessionLocal2() as db:
         role = await _get_member_role_ws(db, cb_id, user_id)
-        if role is None or role == _CookbookRole.READER:
+        if role is None:
             await websocket.close(code=4403)
             return
     await _manager.connect(cb_id, websocket)

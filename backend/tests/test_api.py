@@ -1,11 +1,14 @@
 """Tests d'integration : auth, recettes, cookbooks."""
 
 import json
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
 from app.main import app
+from app.models.cookbook import CookbookInvitation
 
 
 async def _auth_headers(client, email: str, username: str, password: str) -> dict[str, str]:
@@ -106,6 +109,46 @@ async def test_create_recipe_and_favorite(client):
     r = await client.get("/api/v1/recipes?favorites_only=true", headers=headers)
     assert r.status_code == 200
     assert any(rec["id"] == recipe_id for rec in r.json())
+
+
+@pytest.mark.asyncio
+async def test_favorites_only_filter_is_applied_before_pagination(client):
+    headers = await _auth_headers(
+        client,
+        "fav-page@example.com",
+        "fav_page",
+        "SupMeal!FavPage#2026",
+    )
+
+    first_recipe_id: int | None = None
+    for i in range(25):
+        created = await client.post(
+            "/api/v1/recipes",
+            json={
+                "title": f"Recette pagination {i}",
+                "ingredients": [{"name": "ing", "position": 0}],
+                "steps": [{"content": "step", "position": 0}],
+            },
+            headers=headers,
+        )
+        assert created.status_code == 201, created.text
+        if i == 0:
+            first_recipe_id = created.json()["id"]
+
+    assert first_recipe_id is not None
+    fav = await client.post(f"/api/v1/recipes/{first_recipe_id}/favorite", headers=headers)
+    assert fav.status_code == 200, fav.text
+
+    # Le favori est vieux (hors premiere page generale), mais doit apparaitre
+    # grace au filtrage SQL avant offset/limit.
+    listed = await client.get(
+        "/api/v1/recipes?favorites_only=true&skip=0&limit=20",
+        headers=headers,
+    )
+    assert listed.status_code == 200, listed.text
+    payload = listed.json()
+    assert len(payload) >= 1
+    assert any(item["id"] == first_recipe_id for item in payload)
 
 
 @pytest.mark.asyncio
@@ -805,6 +848,89 @@ async def test_cookbook_invitation_token_acceptance(client):
     members = invited_view.json().get("members", [])
     role = next((m["role"] for m in members if m["user"]["username"] == "invitee_user"), None)
     assert role == "commentator"
+
+
+@pytest.mark.asyncio
+async def test_cookbook_invitation_revoke(client):
+    owner_headers = await _auth_headers(
+        client,
+        "invite-revoke-owner@example.com",
+        "invite_revoke_owner",
+        "SupMeal!InviteRevokeOwner#2026",
+    )
+
+    cb = await client.post(
+        "/api/v1/cookbooks",
+        json={"name": "Invite Revoke", "description": "revoke flow"},
+        headers=owner_headers,
+    )
+    assert cb.status_code == 201, cb.text
+    cb_id = cb.json()["id"]
+
+    invite = await client.post(
+        f"/api/v1/cookbooks/{cb_id}/invitations",
+        json={"invited_email": "revoked@example.com", "invited_role": "reader", "expires_in_days": 7},
+        headers=owner_headers,
+    )
+    assert invite.status_code == 201, invite.text
+    inv_id = invite.json()["id"]
+
+    revoke = await client.delete(
+        f"/api/v1/cookbooks/{cb_id}/invitations/{inv_id}",
+        headers=owner_headers,
+    )
+    assert revoke.status_code == 204, revoke.text
+
+    pending = await client.get(
+        f"/api/v1/cookbooks/{cb_id}/invitations?only_pending=true",
+        headers=owner_headers,
+    )
+    assert pending.status_code == 200, pending.text
+    assert all(i["id"] != inv_id for i in pending.json())
+
+
+@pytest.mark.asyncio
+async def test_cookbook_invitation_expired_returns_400(client, db_session):
+    owner_headers = await _auth_headers(
+        client,
+        "invite-exp-owner@example.com",
+        "invite_exp_owner",
+        "SupMeal!InviteExpOwner#2026",
+    )
+    invited_headers = await _auth_headers(
+        client,
+        "invite-exp-user@example.com",
+        "invite_exp_user",
+        "SupMeal!InviteExpUser#2026",
+    )
+
+    cb = await client.post(
+        "/api/v1/cookbooks",
+        json={"name": "Invite Exp", "description": "expire flow"},
+        headers=owner_headers,
+    )
+    assert cb.status_code == 201, cb.text
+    cb_id = cb.json()["id"]
+
+    invite = await client.post(
+        f"/api/v1/cookbooks/{cb_id}/invitations",
+        json={"invited_email": "invite-exp-user@example.com", "invited_role": "reader", "expires_in_days": 7},
+        headers=owner_headers,
+    )
+    assert invite.status_code == 201, invite.text
+    token = invite.json()["token"]
+
+    result = await db_session.execute(select(CookbookInvitation).where(CookbookInvitation.token == token))
+    invitation = result.scalar_one()
+    invitation.expires_at = datetime.now(UTC) - timedelta(minutes=1)
+    await db_session.commit()
+
+    accept = await client.post(
+        f"/api/v1/cookbooks/invitations/{token}/accept",
+        headers=invited_headers,
+    )
+    assert accept.status_code == 400, accept.text
+    assert "expire" in accept.text.lower()
 
 
 @pytest.mark.asyncio

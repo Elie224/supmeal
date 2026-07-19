@@ -1,10 +1,9 @@
 """Schemas Pydantic lies a Recipe, Ingredient, Step, Tag."""
 
 from datetime import datetime
-from typing import Annotated, Literal
+from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field
-
 
 # ---------- Tags ----------
 
@@ -122,7 +121,7 @@ class RecipeSummary(BaseModel):
     prep_time_minutes: int
     cook_time_minutes: int
     servings: int
-    is_favorite: bool
+    is_favorite: bool = False
     owner_id: int | None
     cookbook_id: int | None
     tags: list[TagRead]
