@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useAuthStore } from "./stores/auth";
 import Layout from "./components/Layout";
 import LoginPage from "./pages/LoginPage";
@@ -20,10 +20,13 @@ import { useEffect } from "react";
 function PrivateRoute({ children }: { children: ReactElement }) {
   const isAuth = useAuthStore((s) => s.isAuthenticated);
   const authStatus = useAuthStore((s) => s.authStatus);
+  const location = useLocation();
   if (authStatus === "loading") {
     return <div className="min-h-screen grid place-items-center text-charcoal-500">Chargement...</div>;
   }
-  if (!isAuth) return <Navigate to="/login" replace />;
+  if (!isAuth) {
+    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  }
   return children;
 }
 

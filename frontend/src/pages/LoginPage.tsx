@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { ChefHat } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
@@ -12,6 +12,7 @@ type OAuthProviders = {
 
 export default function LoginPage() {
   const [params] = useSearchParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const setUser = useAuthStore((s) => s.setUser);
   const [email, setEmail] = useState("");
@@ -19,6 +20,7 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const from = (location.state as { from?: string } | null)?.from || "/";
 
   useEffect(() => {
     const verified = params.get("verified");
@@ -50,7 +52,7 @@ export default function LoginPage() {
         full_name: data.user.full_name,
         avatar_url: data.user.avatar_url,
       });
-      navigate("/");
+      navigate(from, { replace: true });
     } catch (err: any) {
       const detail = err?.response?.data?.detail as string | undefined;
       setError(detail || "Connexion impossible");

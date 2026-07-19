@@ -24,6 +24,7 @@ export default function CookbookPage() {
   const [msgContent, setMsgContent] = useState("");
   const [newMember, setNewMember] = useState({ email: "", role: "reader" });
   const [lastInviteLink, setLastInviteLink] = useState<string | null>(null);
+  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
   const [showCreateRecipe, setShowCreateRecipe] = useState(false);
   const [newRecipe, setNewRecipe] = useState({
     title: "",
@@ -195,6 +196,16 @@ export default function CookbookPage() {
     mutationFn: async () => (await api.delete(`/cookbooks/${id}`)).data,
     onSuccess: () => navigate("/cookbooks"),
   });
+
+  const copyInviteLink = async (link: string) => {
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopyFeedback("Lien copie");
+    } catch {
+      setCopyFeedback("Impossible de copier le lien");
+    }
+    window.setTimeout(() => setCopyFeedback(null), 2500);
+  };
 
   if (cookbookQ.isLoading) return <div>Chargement...</div>;
   if (!cookbookQ.data) return <div>Cookbook introuvable</div>;
@@ -455,11 +466,14 @@ export default function CookbookPage() {
                   <button
                     type="button"
                     className="btn-outline"
-                    onClick={() => void navigator.clipboard.writeText(lastInviteLink)}
+                    onClick={() => void copyInviteLink(lastInviteLink)}
                   >
                     Copier
                   </button>
                 </div>
+              )}
+              {copyFeedback && (
+                <div className="text-xs text-charcoal-600">{copyFeedback}</div>
               )}
               {invitationsQ.data && invitationsQ.data.length > 0 && (
                 <div className="space-y-2">
@@ -476,7 +490,7 @@ export default function CookbookPage() {
                           <button
                             type="button"
                             className="btn-outline"
-                            onClick={() => void navigator.clipboard.writeText(inviteLink)}
+                            onClick={() => void copyInviteLink(inviteLink)}
                           >
                             Copier
                           </button>
