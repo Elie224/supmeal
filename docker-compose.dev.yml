@@ -1,0 +1,35 @@
+services:
+  db:
+    ports:
+      - "5432:5432"
+
+  mailpit:
+    profiles: []
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+  backend:
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8765 --reload"
+    volumes:
+      - ./backend:/app
+      - supmeal-uploads:/app/uploads
+
+  frontend:
+    build:
+      target: dev
+      args:
+        VITE_API_URL: http://localhost:8765/api/v1
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_URL: http://localhost:8765/api/v1
+      VITE_DEV_PROXY_TARGET: http://backend:8765
+    volumes:
+      - ./frontend:/app
+      - supmeal-frontend-node-modules:/app/node_modules
+
+volumes:
+  supmeal-frontend-node-modules:

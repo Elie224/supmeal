@@ -11,8 +11,6 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-supmeal}
     volumes:
       - pgdata:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-supmeal} -d ${POSTGRES_DB:-supmeal}"]
       interval: 5s
@@ -26,9 +24,6 @@ services:
     container_name: supmeal-mailpit
     restart: unless-stopped
     profiles: ["dev"]
-    ports:
-      - "1025:1025"
-      - "8025:8025"
     networks:
       - supmeal-net
 
@@ -55,7 +50,7 @@ services:
       - "8765:8765"
     command: >
       sh -c "alembic upgrade head &&
-             uvicorn app.main:app --host 0.0.0.0 --port 8765 --reload"
+             uvicorn app.main:app --host 0.0.0.0 --port 8765"
     networks:
       - supmeal-net
 
@@ -63,19 +58,13 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      target: prod
       args:
-        VITE_API_URL: http://localhost:8765/api/v1
+        VITE_API_URL: /api/v1
     container_name: supmeal-frontend
     restart: unless-stopped
     depends_on:
       - backend
-    ports:
-      - "5173:5173"
-    environment:
-      VITE_API_URL: http://localhost:8765/api/v1
-      VITE_DEV_PROXY_TARGET: http://backend:8765
-    volumes:
-      - ./frontend/src:/app/src
     networks:
       - supmeal-net
 

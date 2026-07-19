@@ -15,16 +15,31 @@ Alternative a Mealie, Tandoor Recipes, Paprika : creer, importer, organiser et p
 
 ## Demarrage rapide
 
+### Mode production-like
+
 ```bash
 git clone <url>
 cd supmeal
 cp .env.example .env
-docker compose up --build
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build
 ```
 
 - API : http://localhost:8765
 - Documentation OpenAPI : http://localhost:8765/docs
-- Web : http://localhost:5173
+- Web : http://localhost
+
+### Mode developpement
+
+```bash
+git clone <url>
+cd supmeal
+cp .env.example .env
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+```
+
+- API : http://localhost:8765
+- Documentation OpenAPI : http://localhost:8765/docs
+- Web (Vite) : http://localhost:5173
 
 ## Structure
 
