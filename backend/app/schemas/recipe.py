@@ -180,3 +180,27 @@ class CommentRead(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ---------- Suggestions ----------
+
+class RecipeSuggestRequest(BaseModel):
+    """Requete pour le suggester de recettes base sur les ingredients disponibles."""
+
+    ingredients: Annotated[list[str], Field(min_length=1, max_length=50)]
+    tag_ids: list[int] | None = None
+    cookbook_id: int | None = None
+    max_prep_time: int | None = Field(default=None, ge=0, le=24*60)
+    max_cook_time: int | None = Field(default=None, ge=0, le=24*60)
+    limit: int = Field(default=10, ge=1, le=50)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class RecipeSuggestion(BaseModel):
+    """Une suggestion de recette avec le detail du matching."""
+
+    recipe: RecipeSummary
+    match_score: float = Field(ge=0.0, le=1.0)
+    matched_ingredients: list[str]
+    missing_ingredients: list[str]

@@ -9,3 +9,4 @@ Bienvenue dans SUPMEAL ! Ce guide vous accompagne pour utiliser toutes les fonct
 3. [Cookbooks partages](./03-cookbooks.md)
 4. [Planifier ses repas](./04-planning.md)
 5. [Importer / Exporter](./05-import-export.md)
+6. [Suggestions de recettes](./06-suggestions.md)

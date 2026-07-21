@@ -36,6 +36,8 @@ from app.schemas.recipe import (
     CommentRead,
     RecipeCreate,
     RecipeRead,
+    RecipeSuggestion,
+    RecipeSuggestRequest,
     RecipeSummary,
     RecipeUpdate,
 )
@@ -496,3 +498,121 @@ async def delete_comment(
         raise HTTPException(status_code=403, detail="Permission insuffisante")
     await db.delete(comment)
     await db.commit()
+
+
+# ---------- Suggestions de recettes ----------
+
+import unicodedata as _unicodedata
+
+
+def _normalize_text(value: str) -> str:
+    """Normalise pour la comparaison d ingredients : minuscules + suppression des accents."""
+    if not value:
+        return ""
+    nfkd = _unicodedata.normalize("NFKD", value)
+    return "".join(c for c in nfkd if not _unicodedata.combining(c)).lower().strip()
+
+
+@router.post("/suggest", response_model=list[RecipeSuggestion])
+async def suggest_recipes(
+    payload: RecipeSuggestRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(_get_optional_user),
+) -> list[RecipeSuggestion]:
+    """Suggere des recettes realisables a partir d une liste d ingredients disponibles.
+
+    Algorithme :
+      1. Normalisation (lowercase + strip accents) des ingredients saisis.
+      2. Pre-filtre SQL : recettes ayant au moins un ingredient qui matche (ILIKE
+         insensible a la casse + `unaccent` cote PostgreSQL).
+      3. Filtres optionnels : tags, temps max, cookbook.
+      4. Score final = matched / total_ingredients ; tri par score desc, puis
+         nombre d ingredients manquants croissant, puis duree totale croissante.
+    """
+    have = [_normalize_text(ing) for ing in payload.ingredients]
+    have = [h for h in have if h]
+    if not have:
+        return []
+
+    stmt = (
+        select(Recipe)
+        .options(selectinload(Recipe.ingredients), selectinload(Recipe.tags))
+    )
+
+    # Visibilite : memes regles que list_recipes
+    visibility_clauses = [and_(Recipe.is_public.is_(True), Recipe.owner_id.is_not(None))]
+    if current_user:
+        visibility_clauses.append(Recipe.owner_id == current_user.id)
+        member_cb_subq = select(CookbookMember.cookbook_id).where(
+            CookbookMember.user_id == current_user.id
+        )
+        visibility_clauses.append(Recipe.cookbook_id.in_(member_cb_subq))
+    stmt = stmt.where(or_(*visibility_clauses))
+
+    if payload.cookbook_id is not None:
+        stmt = stmt.where(Recipe.cookbook_id == payload.cookbook_id)
+    if payload.max_prep_time is not None:
+        stmt = stmt.where(Recipe.prep_time_minutes <= payload.max_prep_time)
+    if payload.max_cook_time is not None:
+        stmt = stmt.where(Recipe.cook_time_minutes <= payload.max_cook_time)
+    if payload.tag_ids:
+        for tid in payload.tag_ids:
+            tag_subq = select(RecipeTag.recipe_id).where(RecipeTag.tag_id == tid)
+            stmt = stmt.where(Recipe.id.in_(tag_subq))
+
+    # Pre-filtre SQL : au moins un ingredient matche (ILIKE sur le nom normalise).
+    # On tente d utiliser `unaccent` cote PG ; il est protege par un fallback ILIKE simple.
+    try:
+        like_clauses = [
+            func.unaccent(RecipeIngredient.name).ilike(f"%{h}%") for h in have
+        ]
+        ingredient_match_subq = (
+            select(RecipeIngredient.recipe_id)
+            .where(or_(*like_clauses))
+            .distinct()
+        )
+    except Exception:
+        ingredient_match_subq = (
+            select(RecipeIngredient.recipe_id)
+            .where(or_(*[RecipeIngredient.name.ilike(f"%{h}%") for h in have]))
+            .distinct()
+        )
+    stmt = stmt.where(Recipe.id.in_(ingredient_match_subq))
+
+    recipes = (await db.execute(stmt)).scalars().unique().all()
+    if not recipes:
+        return []
+
+    suggestions: list[RecipeSuggestion] = []
+    for recipe in recipes:
+        ing_names = [i.name for i in recipe.ingredients if i.name]
+        if not ing_names:
+            continue
+        matched: list[str] = []
+        missing: list[str] = []
+        for name in ing_names:
+            norm = _normalize_text(name)
+            hit = any(h and (h in norm or norm in h) for h in have)
+            (matched if hit else missing).append(name)
+        if not matched:
+            continue
+        total = len(matched) + len(missing)
+        score = len(matched) / total if total else 0.0
+        suggestion = RecipeSuggestion(
+            recipe=_recipe_to_summary(recipe),
+            match_score=round(score, 3),
+            matched_ingredients=matched,
+            missing_ingredients=missing,
+        )
+        suggestions.append(suggestion)
+
+    suggestions.sort(
+        key=lambda s: (
+            -s.match_score,
+            len(s.missing_ingredients),
+            s.recipe.prep_time_minutes + s.recipe.cook_time_minutes,
+            s.recipe.title.lower(),
+        )
+    )
+    return suggestions[: payload.limit]
+

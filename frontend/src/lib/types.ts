@@ -15,3 +15,19 @@ export interface Comment { id: number; recipe_id: number; author_id: number; con
 export interface ShoppingListSummary { id: number; name: string; start_date: string | null; end_date: string | null; is_completed: boolean; created_at: string; }
 export interface ShoppingItem { id: number; name: string; quantity: number | null; unit: string | null; is_checked: boolean; }
 export interface ShoppingListDetail extends ShoppingListSummary { items: ShoppingItem[]; }
+// ---------- Suggestions de recettes ----------
+export interface RecipeSuggestion {
+  recipe: RecipeSummary;
+  match_score: number;
+  matched_ingredients: string[];
+  missing_ingredients: string[];
+}
+
+export interface RecipeSuggestPayload {
+  ingredients: string[];
+  tag_ids?: number[];
+  cookbook_id?: number;
+  max_prep_time?: number;
+  max_cook_time?: number;
+  limit?: number;
+}

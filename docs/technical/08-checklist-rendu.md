@@ -27,6 +27,7 @@
 - Cookbooks et roles (createur/editeur/commentateur/lecteur).
 - Chat temps reel cookbook.
 - Planning hebdomadaire et liste de courses.
+- Suggestions de recettes par ingredients disponibles (page /suggestions, endpoint POST /api/v1/recipes/suggest).
 - Import/Export JSON et CSV.
 - Isolation inter-utilisateurs.
 
@@ -51,3 +52,4 @@
 - Tests backend local: `cd backend && python -m pytest -q`
 - Stop stack: `docker compose down`
 - Stop + volumes: `docker compose down -v`
+

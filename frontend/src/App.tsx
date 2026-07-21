@@ -14,6 +14,7 @@ import SettingsPage from "./pages/SettingsPage";
 import OAuthCallbackPage from "./pages/OAuthCallbackPage";
 import AdminPage from "./pages/AdminPage";
 import InvitationAcceptPage from "./pages/InvitationAcceptPage";
+import SuggestionsPage from "./pages/SuggestionsPage";
 import { type ReactElement } from "react";
 import { useEffect } from "react";
 
@@ -61,6 +62,7 @@ export default function App() {
         <Route path="shopping" element={<ShoppingPage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="admin" element={<AdminPage />} />
+        <Route path="suggestions" element={<SuggestionsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

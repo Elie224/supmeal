@@ -1,5 +1,5 @@
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
-import { ChefHat, Home, BookOpen, Calendar, Settings, LogOut, Plus, ShieldCheck, ShoppingCart } from "lucide-react";
+import { ChefHat, Home, BookOpen, Calendar, Settings, LogOut, Plus, ShieldCheck, ShoppingCart, Sparkles } from "lucide-react";
 import { useAuthStore } from "../stores/auth";
 import { cn } from "../lib/utils";
 
@@ -8,6 +8,7 @@ const navItems = [
   { to: "/cookbooks", label: "Mes cookbooks", icon: BookOpen },
   { to: "/planning", label: "Planning", icon: Calendar },
   { to: "/shopping", label: "Courses", icon: ShoppingCart },
+  { to: "/suggestions", label: "Suggestions", icon: Sparkles },
   { to: "/settings", label: "Parametres", icon: Settings },
 ];
 

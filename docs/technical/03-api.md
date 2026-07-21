@@ -34,6 +34,7 @@ Documentation interactive : `http://localhost:8765/docs` (Swagger UI)
 | DELETE | `/recipes/{id}` | Supprimer |
 | POST | `/recipes/{id}/favorite` | Toggle favori |
 | POST | `/recipes/{id}/image` | Upload image |
+| POST | `/recipes/suggest` | Suggestions a partir d ingredients (`ingredients`, optionnels `tag_ids`, `cookbook_id`, `max_prep_time`, `max_cook_time`, `limit`) |
 
 ## Recherche et filtres
 
