@@ -16,7 +16,7 @@ from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
-SKIP_PATH_PREFIXES = ("/api/v1/auth/", "/api/v1/cookbooks/ws/")
+SKIP_PATH_PREFIXES = ("/api/v1/auth/", "/api/v1/cookbooks/ws/", "/api/v1/recipes/suggest")
 
 
 class CSRFMiddleware:
@@ -75,3 +75,4 @@ class CSRFMiddleware:
             return
 
         await self.app(scope, receive, send)
+

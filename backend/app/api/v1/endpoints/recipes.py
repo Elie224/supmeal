@@ -1,6 +1,7 @@
 """Endpoints Recettes : CRUD, filtres, recherche, favoris, image."""
 
 import os
+import unicodedata as _unicodedata
 import uuid
 from pathlib import Path
 from typing import Annotated
@@ -502,8 +503,6 @@ async def delete_comment(
 
 # ---------- Suggestions de recettes ----------
 
-import unicodedata as _unicodedata
-
 
 def _normalize_text(value: str) -> str:
     """Normalise pour la comparaison d ingredients : minuscules + suppression des accents."""
@@ -615,4 +614,6 @@ async def suggest_recipes(
         )
     )
     return suggestions[: payload.limit]
+
+
 
