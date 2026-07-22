@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = "0006_remove_recipe_is_favorite"
-down_revision = "0005_favorites_invitations"
+down_revision = "0005_fav_invite"
 branch_labels = None
 depends_on = None
 
