@@ -15,6 +15,7 @@
 ## 2) Securite et secrets
 
 - Verifier qu aucun secret reel n est commite.
+- Verifier que l archive de rendu ne contient pas `.env` (uniquement `.env.example`).
 - Confirmer les en-tetes de securite actifs.
 - Confirmer CORS sans wildcard avec cookies.
 - Verifier hashing mot de passe et absence de `hashed_password` dans les reponses API.
@@ -42,6 +43,7 @@
 ## 5) Documentation et soutenance
 
 - Verifier coherence README + docs techniques.
+- Verifier que la section deploiement public (Fly.io + Netlify) est a jour avec les URLs finales.
 - Ajouter captures ecran sur les parcours critiques.
 - Ajouter matrice finale des permissions.
 - Prepararer un scenario de demo de 8 a 12 minutes.

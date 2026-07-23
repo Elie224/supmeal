@@ -44,7 +44,8 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
     try {
-      const { data } = await api.post("/auth/login", { email, password });
+      const normalizedEmail = email.trim().toLowerCase();
+      const { data } = await api.post("/auth/login", { email: normalizedEmail, password });
       setUser({
         id: data.user.id,
         email: data.user.email,

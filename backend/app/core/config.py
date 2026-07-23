@@ -2,8 +2,10 @@
 
 from functools import lru_cache
 from typing import Literal
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from pydantic import (
+    Field,
     field_validator,
     model_validator,  # noqa: E402
 )
@@ -42,6 +44,7 @@ class Settings(BaseSettings):
     postgres_db: str = "supmeal"
     postgres_user: str = "supmeal"
     postgres_password: str = "supmeal"
+    database_url_override: str | None = Field(default=None, validation_alias="DATABASE_URL")
 
     # Uploads
     upload_dir: str = "./uploads"
@@ -89,6 +92,22 @@ class Settings(BaseSettings):
 
     @property
     def database_url(self) -> str:
+        if self.database_url_override:
+            raw = self.database_url_override.strip()
+            if raw.startswith("postgres://"):
+                raw = "postgresql://" + raw[len("postgres://"):]
+            parts = urlsplit(raw)
+            scheme = parts.scheme
+            if scheme == "postgresql":
+                scheme = "postgresql+asyncpg"
+            query_items = parse_qsl(parts.query, keep_blank_values=True)
+            filtered_query: list[tuple[str, str]] = []
+            for key, value in query_items:
+                if key.lower() in {"sslmode", "ssl"}:
+                    continue
+                filtered_query.append((key, value))
+            normalized_query = urlencode(filtered_query)
+            return urlunsplit((scheme, parts.netloc, parts.path, normalized_query, parts.fragment))
         return (
             f"postgresql+asyncpg://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
@@ -97,6 +116,13 @@ class Settings(BaseSettings):
     @property
     def sync_database_url(self) -> str:
         """URL sync pour Alembic."""
+        if self.database_url_override:
+            raw = self.database_url_override.strip()
+            if raw.startswith("postgres://"):
+                raw = "postgresql://" + raw[len("postgres://"):]
+            parts = urlsplit(raw)
+            scheme = parts.scheme.replace("+asyncpg", "")
+            return urlunsplit((scheme, parts.netloc, parts.path, parts.query, parts.fragment))
         return (
             f"postgresql+psycopg2://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"

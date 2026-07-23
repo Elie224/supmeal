@@ -5,6 +5,7 @@
 - Docker 20.10+ et Docker Compose v2+
 - 2 Go de RAM minimum
 - Ports 5432, 8765, 5173 disponibles
+- (Option deploiement public) comptes Fly.io et Netlify
 
 ## Demarrage rapide (developpement)
 
@@ -49,21 +50,26 @@ Au premier lancement, les migrations Alembic sont executees automatiquement et l
 
 ### OAuth2
 
+Providers implementes dans le projet: Google et GitHub.
 Pour activer un provider OAuth, creer une application sur la plateforme correspondante et renseigner les variables d environnement. Si un provider n est pas configure, ses routes renvoient 501.
+
+Le backend genere dynamiquement la callback OAuth selon l hote courant (local/prod).
+Cela permet d utiliser les memes credentials Google sur plusieurs environnements si toutes les callbacks sont enregistrees chez le provider.
 
 Configuration locale recommandee:
 
 - `APP_URL=http://localhost:5173`
-- `GOOGLE_REDIRECT_URI=http://localhost:8765/api/v1/auth/oauth/google/callback`
-- `GITHUB_REDIRECT_URI=http://localhost:8765/api/v1/auth/oauth/github/callback`
+- `BACKEND_CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173`
 
 Valeurs a enregistrer chez les providers:
 
 - Google Cloud Console
-    - Authorized redirect URI: `http://localhost:8765/api/v1/auth/oauth/google/callback`
-    - Authorized JavaScript origins: `http://localhost:5173`
+    - Authorized redirect URI (local): `http://localhost:8765/api/v1/auth/oauth/google/callback`
+    - Authorized redirect URI (prod): `https://supmeal-api-elisee.fly.dev/api/v1/auth/oauth/google/callback`
+    - Authorized JavaScript origins: `http://localhost:5173`, `https://supmeal-web-elisee.netlify.app`
 - GitHub OAuth App
-    - Authorization callback URL: `http://localhost:8765/api/v1/auth/oauth/github/callback`
+    - Authorization callback URL (prod): `https://supmeal-api-elisee.fly.dev/api/v1/auth/oauth/github/callback`
+    - Note: GitHub OAuth App n accepte qu une seule callback URL. Pour supporter local + prod en meme temps, creer 2 OAuth Apps GitHub (une locale, une prod).
 
 Verification rapide:
 
@@ -120,7 +126,54 @@ Configuration production recommandee (exemple Brevo):
 
 Fichier modele production disponible: `.env.production.example`.
 
-## Deploiement en production
+## Deploiement public (Netlify + Fly.io)
+
+### Backend API (Fly.io)
+
+```bash
+cd backend
+
+# Creer l application et le volume uploads (une seule fois)
+fly apps create supmeal-api-elisee
+fly volumes create uploads_data --region cdg --size 5 --app supmeal-api-elisee
+
+# Base PostgreSQL Fly et attachement (une seule fois)
+fly postgres create --name supmeal-db-elisee --region cdg --initial-cluster-size 1 --vm-size shared-cpu-1x --volume-size 10
+fly postgres attach --app supmeal-api-elisee supmeal-db-elisee
+
+# Secrets runtime
+fly secrets set APP_URL=https://supmeal-web-elisee.netlify.app BACKEND_CORS_ORIGINS=https://supmeal-web-elisee.netlify.app --app supmeal-api-elisee
+
+# Deploiement
+fly deploy --app supmeal-api-elisee --strategy immediate
+```
+
+Verification:
+
+- `https://supmeal-api-elisee.fly.dev/health`
+- `https://supmeal-api-elisee.fly.dev/api/v1/auth/oauth/providers`
+
+### Frontend (Netlify)
+
+```bash
+cd frontend
+
+# Creer/lier le site
+netlify sites:create --name supmeal-web-elisee
+netlify link --name supmeal-web-elisee
+
+# URL API de production
+netlify env:set VITE_API_URL https://supmeal-api-elisee.fly.dev/api/v1
+
+# Deploiement prod
+netlify deploy --prod
+```
+
+Verification:
+
+- `https://supmeal-web-elisee.netlify.app`
+
+## Deploiement en production (self-host Docker)
 
 ### Variables de production
 

@@ -3,6 +3,7 @@
 import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from sqlalchemy import func
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,6 +25,7 @@ router = APIRouter()
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 async def register(payload: UserCreate, request: Request, db: AsyncSession = Depends(get_db)) -> TokenResponse:
+    normalized_email = payload.email.strip().lower()
     client_ip = request.client.host if request.client else "unknown"
     settings = _auth_settings()
     if settings.app_env != "test" and not register_limiter.is_allowed(client_ip):
@@ -42,7 +44,7 @@ async def register(payload: UserCreate, request: Request, db: AsyncSession = Dep
             detail="Ce mot de passe est apparu dans des fuites de donnees publiques. Veuillez en choisir un autre.",
         )
     # Verifier unicite email et username
-    by_email = await db.execute(select(User).where(User.email == payload.email))
+    by_email = await db.execute(select(User).where(func.lower(User.email) == normalized_email))
     email_user = by_email.scalar_one_or_none()
 
     by_username = await db.execute(select(User).where(User.username == payload.username))
@@ -83,7 +85,7 @@ async def register(payload: UserCreate, request: Request, db: AsyncSession = Dep
         )
 
     user = User(
-        email=payload.email,
+        email=normalized_email,
         username=payload.username,
         full_name=payload.full_name,
         hashed_password=hash_password(payload.password),
@@ -109,11 +111,12 @@ async def register(payload: UserCreate, request: Request, db: AsyncSession = Dep
 
 @router.post("/login", response_model=TokenResponse)
 async def login(payload: LoginRequest, request: Request, db: AsyncSession = Depends(get_db)) -> TokenResponse:
+    normalized_email = payload.email.strip().lower()
     client_ip = request.client.host if request.client else "unknown"
     settings = _auth_settings()
     if settings.app_env != "test" and not login_limiter.is_allowed(client_ip):
         raise HTTPException(status_code=429, detail="Trop de tentatives. Reessayez plus tard.")
-    result = await db.execute(select(User).where(User.email == payload.email))
+    result = await db.execute(select(User).where(func.lower(User.email) == normalized_email))
     user = result.scalar_one_or_none()
     if not user or not user.hashed_password or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(

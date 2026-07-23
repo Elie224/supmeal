@@ -5,6 +5,7 @@ from typing import Any
 from authlib.integrations.starlette_client import OAuth
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
+from sqlalchemy import func
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.config import Config
@@ -60,6 +61,7 @@ async def _get_or_create_user(
     db: AsyncSession, provider: str, provider_user_id: str, email: str, name: str | None,
 ) -> User:
     """Trouve ou cree un user OAuth."""
+    normalized_email = email.strip().lower()
     result = await db.execute(
         select(User).where(
             (User.auth_provider == AuthProvider(provider)) & (User.provider_user_id == provider_user_id)
@@ -70,7 +72,7 @@ async def _get_or_create_user(
         return user
 
     # Verifier si un compte local existe deja avec cet email -> on lie les providers
-    result = await db.execute(select(User).where(User.email == email))
+    result = await db.execute(select(User).where(func.lower(User.email) == normalized_email))
     user = result.scalar_one_or_none()
     if user:
         user.auth_provider = AuthProvider(provider)
@@ -93,7 +95,7 @@ async def _get_or_create_user(
         username = f"{username_base}{suffix}"
 
     user = User(
-        email=email,
+        email=normalized_email,
         username=username,
         full_name=name,
         auth_provider=AuthProvider(provider),
@@ -110,18 +112,20 @@ async def _get_or_create_user(
 async def oauth_login(provider: str, request: Request):
     if not _is_provider_configured(provider):
         raise HTTPException(status_code=501, detail=f"OAuth {provider} non configure")
-    redirect_uri_map = {
-        "google": settings.google_redirect_uri,
-        "github": settings.github_redirect_uri,
-    }
-    redirect_uri = redirect_uri_map.get(provider)
-    if not redirect_uri:
+    if provider not in {"google", "github"}:
         raise HTTPException(status_code=400, detail="Provider inconnu")
+    # Utilise l'hote courant (local/prod) et respecte le schema externe
+    # via les headers proxy pour eviter les mismatch http/https en production.
+    forwarded_proto = (request.headers.get("x-forwarded-proto") or "").split(",")[0].strip()
+    forwarded_host = (request.headers.get("x-forwarded-host") or "").split(",")[0].strip()
+    scheme = forwarded_proto or request.url.scheme
+    host = forwarded_host or request.headers.get("host") or request.url.hostname or "localhost"
+    redirect_uri = f"{scheme}://{host}/api/v1/auth/oauth/{provider}/callback"
     client = getattr(oauth, provider)
     return await client.authorize_redirect(request, redirect_uri)
 
 
-@router.get("/{provider}/callback")
+@router.get("/{provider}/callback", name="oauth_callback")
 async def oauth_callback(provider: str, request: Request, db: AsyncSession = Depends(get_db)):
     if not _is_provider_configured(provider):
         raise HTTPException(status_code=501, detail=f"OAuth {provider} non configure")

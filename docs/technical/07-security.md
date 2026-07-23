@@ -27,7 +27,9 @@ SUPMEAL suit les bonnes pratiques de securite applicative.
 
 - `.env.example` documente les variables ; `.env` (reel) est dans `.gitignore`.
 - Aucun secret n est commit dans le depot.
+- Le rendu final (zip) ne doit pas contenir de fichier `.env` avec valeurs reelles.
 - Pour la production : generer des valeurs aleatoires d au moins 32 caracteres pour `SECRET_KEY` et `JWT_SECRET`.
+- En cas d exposition accidentelle d un secret (capture, partage, commit), regenerer immediatement le secret concerne.
 
 ## CORS
 
