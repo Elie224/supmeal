@@ -52,6 +52,7 @@ export default function LoginPage() {
         username: data.user.username,
         full_name: data.user.full_name,
         avatar_url: data.user.avatar_url,
+        role: data.user.role,
       });
       navigate(from, { replace: true });
     } catch (err: any) {

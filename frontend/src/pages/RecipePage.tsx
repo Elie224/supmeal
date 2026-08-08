@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Heart, Calendar, ArrowLeft, Trash2, Pencil } from "lucide-react";
-import { api } from "../lib/api";
+import { api, resolveMediaUrl } from "../lib/api";
 import { useAuthStore } from "../stores/auth";
 import { formatDuration, cn } from "../lib/utils";
 import type { Recipe } from "../lib/types";
@@ -99,7 +99,7 @@ export default function RecipePage() {
       </div>
 
       <div className="card overflow-hidden">
-        {r.image_url && <img src={r.image_url} alt={r.title} className="w-full h-64 object-cover" />}
+        {r.image_url && <img src={resolveMediaUrl(r.image_url)} alt={r.title} className="w-full h-64 object-cover" />}
         <div className="p-6">
           <h1 className="font-display font-bold text-3xl text-charcoal-900">{r.title}</h1>
           {r.description && <p className="text-charcoal-700 mt-2">{r.description}</p>}

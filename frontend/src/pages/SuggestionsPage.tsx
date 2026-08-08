@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Sparkles, X, Plus, Clock, Users } from "lucide-react";
 import { Link } from "react-router-dom";
-import { api } from "../lib/api";
+import { api, resolveMediaUrl } from "../lib/api";
 import type { RecipeSuggestion as RecipeSuggestionType, RecipeSuggestPayload } from "../lib/types";
 import { formatDuration, cn } from "../lib/utils";
 
@@ -193,7 +193,7 @@ export default function SuggestionsPage() {
               >
                 {s.recipe.image_url ? (
                   <img
-                    src={s.recipe.image_url}
+                    src={resolveMediaUrl(s.recipe.image_url)}
                     alt={s.recipe.title}
                     className="w-full h-full object-cover"
                   />

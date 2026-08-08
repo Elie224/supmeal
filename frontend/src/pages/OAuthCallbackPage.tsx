@@ -43,6 +43,7 @@ export default function OAuthCallbackPage() {
             username: user.username,
             full_name: user.full_name,
             avatar_url: user.avatar_url,
+            role: user.role,
           });
           navigate("/", { replace: true });
         })
@@ -71,6 +72,7 @@ export default function OAuthCallbackPage() {
             username: data.username,
             full_name: data.full_name,
             avatar_url: data.avatar_url,
+            role: data.role,
           });
           navigate("/", { replace: true });
         })

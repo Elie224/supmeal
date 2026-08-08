@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { Heart, Clock, Users } from "lucide-react";
+import { resolveMediaUrl } from "../lib/api";
 import { formatDuration, cn } from "../lib/utils";
 import type { RecipeSummary } from "../lib/types";
 
@@ -16,7 +17,7 @@ export default function RecipeCard({ recipe, onToggleFavorite }: Props) {
     >
       <div className="aspect-[16/10] bg-cream-100 relative">
         {recipe.image_url ? (
-          <img src={recipe.image_url} alt={recipe.title} className="w-full h-full object-cover" />
+          <img src={resolveMediaUrl(recipe.image_url)} alt={recipe.title} className="w-full h-full object-cover" />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-charcoal-300 text-4xl">&#127869;</div>
         )}

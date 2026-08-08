@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Download, Upload } from "lucide-react";
-import { api } from "../lib/api";
+import { api, resolveMediaUrl } from "../lib/api";
 import type { User } from "../lib/types";
 
 type OAuthProviders = {
@@ -133,7 +133,7 @@ export default function SettingsPage() {
         <div className="flex items-center gap-4">
           <div className="w-16 h-16 rounded-full bg-cream-100 overflow-hidden flex items-center justify-center">
             {meQ.data.avatar_url ? (
-              <img src={meQ.data.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+              <img src={resolveMediaUrl(meQ.data.avatar_url)} alt="Avatar" className="w-full h-full object-cover" />
             ) : (
               <span className="text-charcoal-500 text-sm">N/A</span>
             )}

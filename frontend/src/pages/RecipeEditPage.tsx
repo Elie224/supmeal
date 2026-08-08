@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Plus, Trash2 } from "lucide-react";
-import { api } from "../lib/api";
+import { api, resolveMediaUrl } from "../lib/api";
 import { useQuery } from "@tanstack/react-query";
 import type { Recipe, Ingredient, Step, Tag } from "../lib/types";
 
@@ -144,7 +144,7 @@ export default function RecipeEditPage() {
         <div>
           <label className="label">Image de la recette</label>
           {form.image_url && (
-            <img src={form.image_url} alt="Apercu" className="w-full max-w-xs h-40 object-cover rounded border border-cream-200 mb-2" />
+            <img src={resolveMediaUrl(form.image_url)} alt="Apercu" className="w-full max-w-xs h-40 object-cover rounded border border-cream-200 mb-2" />
           )}
           <input
             className="input"

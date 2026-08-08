@@ -2,6 +2,28 @@ import axios, { AxiosError, InternalAxiosRequestConfig } from "axios";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api/v1";
 
+function getApiOrigin(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    return new URL(API_URL, window.location.origin).origin;
+  } catch {
+    return window.location.origin;
+  }
+}
+
+export function resolveMediaUrl(path: string | null | undefined): string {
+  if (!path) return "";
+  if (/^https?:\/\//i.test(path)) return path;
+  if (path.startsWith("//")) {
+    if (typeof window !== "undefined") {
+      return `${window.location.protocol}${path}`;
+    }
+    return `https:${path}`;
+  }
+  const normalized = path.startsWith("/") ? path : `/${path}`;
+  return `${getApiOrigin()}${normalized}`;
+}
+
 export function getCookie(name: string): string | null {
   if (typeof document === "undefined") return null;
   const m = document.cookie.match(new RegExp("(?:^|; )" + name.replace(/([.$?*|{}()\[\]\\\/\+^])/g, "\\$1") + "=([^;]*)"));

@@ -9,7 +9,7 @@ import {
   UserX,
   Search,
 } from "lucide-react";
-import { api, getCsrfToken } from "../lib/api";
+import { api, getCsrfToken, resolveMediaUrl } from "../lib/api";
 import { useAuthStore } from "../stores/auth";
 import { cn } from "../lib/utils";
 
@@ -472,7 +472,7 @@ function RecipesTab({
                   <div className="flex items-center gap-2">
                     {r.image_url ? (
                       <img
-                        src={r.image_url}
+                        src={resolveMediaUrl(r.image_url)}
                         alt=""
                         className="w-8 h-8 rounded object-cover"
                       />
