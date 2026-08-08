@@ -197,7 +197,7 @@ npm install
 npm run build
 ```
 
-Le bundle statique est genere dans `frontend/dist/`. A servir par un reverse-proxy (Nginx, Caddy) ou directement par un serveur FastAPI separÃ©.
+Le bundle statique est genere dans `frontend/dist/`. A servir par un reverse-proxy (Nginx, Caddy) ou directement par un serveur FastAPI separe.
 
 ### Reverse proxy Nginx (exemple)
 
