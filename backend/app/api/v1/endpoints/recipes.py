@@ -324,6 +324,9 @@ async def update_recipe(
     )
     await db.commit()
 
+    # La recette et ses relations ont deja pu etre chargees dans
+    # l'identity map. Apres remplacement des ingredients/etapes/tags,
+    # forcer SQLAlchemy a recharger l'etat depuis la base.
     result = await db.execute(
         select(Recipe)
         .options(
@@ -332,6 +335,7 @@ async def update_recipe(
             selectinload(Recipe.tags),
         )
         .where(Recipe.id == recipe_id)
+        .execution_options(populate_existing=True)
     )
     recipe_out = result.scalar_one()
     fav_result = await db.execute(
