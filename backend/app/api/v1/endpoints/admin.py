@@ -151,21 +151,28 @@ async def list_all_users(
     users = result.scalars().all()
 
     user_ids = [u.id for u in users]
-    recipe_counts: dict = {}
-    cookbook_counts: dict = {}
+    recipe_counts: dict[int, int] = {}
+    cookbook_counts: dict[int, int] = {}
     if user_ids:
         rr = await db.execute(
             select(Recipe.owner_id, func.count(Recipe.id))
             .where(Recipe.owner_id.in_(user_ids))
             .group_by(Recipe.owner_id)
         )
-        recipe_counts = dict(rr.all())
+        recipe_counts = {
+            int(owner_id): int(count)
+            for owner_id, count in rr.tuples().all()
+            if owner_id is not None
+        }
         cr = await db.execute(
             select(Cookbook.owner_id, func.count(Cookbook.id))
             .where(Cookbook.owner_id.in_(user_ids))
             .group_by(Cookbook.owner_id)
         )
-        cookbook_counts = dict(cr.all())
+        cookbook_counts = {
+            int(owner_id): int(count)
+            for owner_id, count in cr.tuples().all()
+        }
 
     out: list[AdminUserRead] = []
     for u in users:

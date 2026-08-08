@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 from typing import Any
 
-from sqlalchemy import select, text
+from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.recipe import Recipe, RecipeFavorite, RecipeIngredient, RecipeStep, RecipeTag, Tag
@@ -128,12 +128,12 @@ async def create_recipe(
         if not name:
             continue
         existing_tag = await db.execute(select(Tag).where(Tag.name == name))
-        tag = existing_tag.scalar_one_or_none()
-        if not tag:
-            tag = Tag(name=name)
-            db.add(tag)
+        tag_obj = existing_tag.scalar_one_or_none()
+        if tag_obj is None:
+            tag_obj = Tag(name=name)
+            db.add(tag_obj)
             await db.flush()
-        db.add(RecipeTag(recipe_id=recipe.id, tag_id=tag.id))
+        db.add(RecipeTag(recipe_id=recipe.id, tag_id=tag_obj.id))
 
     if favorite_user_id is not None:
         db.add(RecipeFavorite(user_id=favorite_user_id, recipe_id=recipe.id))
@@ -155,7 +155,7 @@ async def update_recipe(
         setattr(recipe, key, value)
 
     if ingredients is not None:
-        await db.execute(RecipeIngredient.__table__.delete().where(RecipeIngredient.recipe_id == recipe.id))
+        await db.execute(delete(RecipeIngredient).where(RecipeIngredient.recipe_id == recipe.id))
         for i, ing in enumerate(ingredients):
             db.add(
                 RecipeIngredient(
@@ -169,7 +169,7 @@ async def update_recipe(
             )
 
     if steps is not None:
-        await db.execute(RecipeStep.__table__.delete().where(RecipeStep.recipe_id == recipe.id))
+        await db.execute(delete(RecipeStep).where(RecipeStep.recipe_id == recipe.id))
         for i, step in enumerate(steps):
             content = str(step.get("content", "")).strip()
             if not content:
@@ -183,7 +183,7 @@ async def update_recipe(
             )
 
     if tag_ids is not None:
-        await db.execute(RecipeTag.__table__.delete().where(RecipeTag.recipe_id == recipe.id))
+        await db.execute(delete(RecipeTag).where(RecipeTag.recipe_id == recipe.id))
         for tid in tag_ids:
             db.add(RecipeTag(recipe_id=recipe.id, tag_id=tid))
 

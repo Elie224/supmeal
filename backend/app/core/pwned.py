@@ -18,10 +18,10 @@ import httpx
 
 _HIBP_URL = "https://api.pwnedpasswords.com/range"
 _TIMEOUT = 2.0
-_cache = {}
+_cache: dict[str, tuple[bool, float]] = {}
 _cache_lock = Lock()
 _CACHE_TTL = 3600
-_suffixes_map = {}
+_suffixes_map: dict[str, set[str]] = {}
 
 
 def _hash_pw(password):

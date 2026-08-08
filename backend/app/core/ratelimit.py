@@ -6,7 +6,7 @@ class InMemoryRateLimiter:
     def __init__(self, max_requests: int = 5, window_seconds: int = 60):
         self.max_requests = max_requests
         self.window = window_seconds
-        self.buckets = defaultdict(list)
+        self.buckets: defaultdict[str, list[float]] = defaultdict(list)
 
     def is_allowed(self, key: str) -> bool:
         now = time()
@@ -27,7 +27,7 @@ class IPRateLimit:
     def __init__(self, max_requests: int, window_seconds: int):
         self.max_requests = max_requests
         self.window = window_seconds
-        self.buckets: dict = defaultdict(list)
+        self.buckets: defaultdict[str, list[float]] = defaultdict(list)
 
     def is_allowed(self, key: str) -> bool:
         from time import time

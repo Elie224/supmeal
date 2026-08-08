@@ -24,8 +24,8 @@ ALLOWED_IMAGE_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 
 @router.get("", response_model=list[UserPublic])
 async def list_users(
+    _: CurrentUser,
     db: AsyncSession = Depends(get_db),
-    _: CurrentUser = ...,
     q: str | None = None,
 ) -> list[UserPublic]:
     """Liste minimale des utilisateurs (pour inviter dans un cookbook). Auth requise."""
@@ -40,8 +40,8 @@ async def list_users(
 @router.get("/{user_id}", response_model=UserPublic)
 async def get_user(
     user_id: int,
+    _: CurrentUser,
     db: AsyncSession = Depends(get_db),
-    _: CurrentUser = ...,
 ) -> UserPublic:
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()

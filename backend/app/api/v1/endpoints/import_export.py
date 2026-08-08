@@ -159,8 +159,8 @@ async def export_csv(current_user: CurrentUser, db: AsyncSession = Depends(get_d
 
 @router.post("/json", status_code=201)
 async def import_json(
+    current_user: CurrentUser,
     file: UploadFile = File(...),
-    current_user: CurrentUser = ...,
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, int]:
     """Importe un JSON SUPMEAL ou compatible Mealie."""
@@ -180,15 +180,18 @@ async def import_json(
 
     try:
         if fmt == "mealie":
-            validated = MealieImportPayload.model_validate(data)
+            mealie_payload = MealieImportPayload.model_validate(data)
             recipes = [
                 mealie_to_recipe(recipe.model_dump(mode="json", by_alias=True))
-                for recipe in validated.recipes
+                for recipe in mealie_payload.recipes
             ]
         else:
-            validated = SupmealImportPayload.model_validate(data)
-            recipes = [recipe.model_dump(mode="json") for recipe in validated.recipes]
-            cookbooks_payload = [cookbook.model_dump(mode="json") for cookbook in validated.cookbooks]
+            supmeal_payload = SupmealImportPayload.model_validate(data)
+            recipes = [recipe.model_dump(mode="json") for recipe in supmeal_payload.recipes]
+            cookbooks_payload = [
+                cookbook.model_dump(mode="json")
+                for cookbook in supmeal_payload.cookbooks
+            ]
     except ValidationError as exc:
         raise HTTPException(status_code=422, detail=exc.errors()) from exc
 
@@ -225,8 +228,8 @@ async def import_json(
 
 @router.post("/csv", status_code=201)
 async def import_csv(
+    current_user: CurrentUser,
     file: UploadFile = File(...),
-    current_user: CurrentUser = ...,
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """Importe un CSV. Le regroupement par titre est automatique."""

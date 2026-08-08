@@ -23,7 +23,7 @@ router = APIRouter()
 
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
-async def register(payload: UserCreate, request: Request, db: AsyncSession = Depends(get_db)) -> TokenResponse:
+async def register(payload: UserCreate, request: Request, db: AsyncSession = Depends(get_db)) -> Response:
     normalized_email = payload.email.strip().lower()
     client_ip = request.client.host if request.client else "unknown"
     settings = _auth_settings()
@@ -57,7 +57,7 @@ async def register(payload: UserCreate, request: Request, db: AsyncSession = Dep
         and not email_user.is_verified
         and (username_user is None or username_user.id == email_user.id)
     )
-    if can_reactivate:
+    if can_reactivate and email_user is not None:
         email_user.username = payload.username
         email_user.full_name = payload.full_name
         email_user.hashed_password = hash_password(payload.password)
@@ -109,7 +109,7 @@ async def register(payload: UserCreate, request: Request, db: AsyncSession = Dep
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(payload: LoginRequest, request: Request, db: AsyncSession = Depends(get_db)) -> TokenResponse:
+async def login(payload: LoginRequest, request: Request, db: AsyncSession = Depends(get_db)) -> Response:
     normalized_email = payload.email.strip().lower()
     client_ip = request.client.host if request.client else "unknown"
     settings = _auth_settings()
@@ -140,7 +140,7 @@ async def me(current_user: CurrentUser) -> UserRead:
 
 
 @router.post("/exchange", response_model=TokenResponse)
-async def exchange_oauth_code(payload: dict, db: AsyncSession = Depends(get_db)) -> TokenResponse:
+async def exchange_oauth_code(payload: dict, db: AsyncSession = Depends(get_db)) -> Response:
     """Echange un code OAuth a usage unique (1 min) contre un JWT.
     Le navigateur appelle /auth/callback?code=XXX puis POST /auth/exchange{code}.
     Cela evite d avoir le token dans l URL (logs, referrer, historique)."""

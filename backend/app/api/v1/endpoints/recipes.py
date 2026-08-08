@@ -91,15 +91,15 @@ async def _can_edit(recipe: Recipe, user_id: int, db: AsyncSession) -> bool:
 
 # ---------- Helpers de transformation ----------
 
-def _recipe_to_read(recipe: Recipe) -> RecipeRead:
+def _recipe_to_read(recipe: Recipe, *, is_favorite: bool = False) -> RecipeRead:
     data = RecipeRead.model_validate(recipe).model_dump()
-    data["is_favorite"] = bool(getattr(recipe, "_is_favorite", False))
+    data["is_favorite"] = is_favorite
     return RecipeRead.model_validate(data)
 
 
-def _recipe_to_summary(recipe: Recipe) -> RecipeSummary:
+def _recipe_to_summary(recipe: Recipe, *, is_favorite: bool = False) -> RecipeSummary:
     data = RecipeSummary.model_validate(recipe).model_dump()
-    data["is_favorite"] = bool(getattr(recipe, "_is_favorite", False))
+    data["is_favorite"] = is_favorite
     return RecipeSummary.model_validate(data)
 
 
@@ -161,8 +161,7 @@ async def create_recipe(
         .where(Recipe.id == recipe.id)
     )
     recipe_out = result.scalar_one()
-    recipe_out._is_favorite = False
-    return _recipe_to_read(recipe_out)
+    return _recipe_to_read(recipe_out, is_favorite=False)
 
 
 @router.get("", response_model=list[RecipeSummary])
@@ -260,9 +259,10 @@ async def list_recipes(
             favorite_ids = {r.id for r in recipes}
         else:
             favorite_ids = await _favorite_recipe_ids(db, current_user.id, [r.id for r in recipes])
-    for r in recipes:
-        r._is_favorite = r.id in favorite_ids
-    return [_recipe_to_summary(r) for r in recipes]
+    return [
+        _recipe_to_summary(r, is_favorite=r.id in favorite_ids)
+        for r in recipes
+    ]
 
 
 @router.get("/{recipe_id}", response_model=RecipeRead)
@@ -283,16 +283,15 @@ async def get_recipe(
         raise HTTPException(status_code=404, detail="Recette introuvable")
     if not await _can_view(recipe, current_user.id if current_user else None, db):
         raise HTTPException(status_code=403, detail="Acces refuse")
+    is_favorite = False
     if current_user:
         fav_result = await db.execute(
             select(RecipeFavorite).where(
                 (RecipeFavorite.user_id == current_user.id) & (RecipeFavorite.recipe_id == recipe.id)
             )
         )
-        recipe._is_favorite = fav_result.scalar_one_or_none() is not None
-    else:
-        recipe._is_favorite = False
-    return _recipe_to_read(recipe)
+        is_favorite = fav_result.scalar_one_or_none() is not None
+    return _recipe_to_read(recipe, is_favorite=is_favorite)
 
 
 @router.patch("/{recipe_id}", response_model=RecipeRead)
@@ -340,8 +339,8 @@ async def update_recipe(
             (RecipeFavorite.user_id == current_user.id) & (RecipeFavorite.recipe_id == recipe_out.id)
         )
     )
-    recipe_out._is_favorite = fav_result.scalar_one_or_none() is not None
-    return _recipe_to_read(recipe_out)
+    is_favorite = fav_result.scalar_one_or_none() is not None
+    return _recipe_to_read(recipe_out, is_favorite=is_favorite)
 
 
 @router.delete("/{recipe_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -377,14 +376,14 @@ async def toggle_favorite(
     existing = existing_result.scalar_one_or_none()
     if existing:
         await db.delete(existing)
-        recipe._is_favorite = False
+        is_favorite = False
     else:
         db.add(RecipeFavorite(user_id=current_user.id, recipe_id=recipe.id))
-        recipe._is_favorite = True
+        is_favorite = True
 
     await db.commit()
     await db.refresh(recipe)
-    return _recipe_to_read(recipe)
+    return _recipe_to_read(recipe, is_favorite=is_favorite)
 
 
 @router.post("/{recipe_id}/image", response_model=RecipeRead)

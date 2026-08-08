@@ -166,7 +166,7 @@ async def oauth_callback(provider: str, request: Request, db: AsyncSession = Dep
     # En attendant un echange complet, on renvoie un code opaque a usage unique.
     import secrets
 
-    from app.api.v1.endpoints._oauth_codes import store_code  # type: ignore
+    from app.api.v1.endpoints._oauth_codes import store_code
     code = secrets.token_urlsafe(32)
     store_code(code, access_token, ttl=60)
     frontend_url = f"{settings.app_url}/auth/callback?code={code}"
