@@ -1,6 +1,6 @@
 # SUPMEAL
 
-[![CI](https://github.com/Elie224/supmeal/actions/workflows/ci.yml/badge.svg)](https://github.com/Elie224/supmeal/actions/workflows/ci.yml)
+[![CI](https://github.com/Elie224/supmeal/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Elie224/supmeal/actions/workflows/ci.yml)
 
 Application web de gestion de recettes et planification de repas, developpee pour la societe SUPMEAL Pro.
 
@@ -70,5 +70,6 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 ## Licence
 
 Projet academique - SUPMEAL Pro.
+
 
 
