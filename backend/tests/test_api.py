@@ -50,6 +50,23 @@ async def test_register_login(client):
     assert r2.status_code == 200
     assert "access_token" in r2.json()
 
+    access_token = r2.json()["access_token"]
+
+    ws_response = await client.post(
+        "/api/v1/auth/ws-token",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert ws_response.status_code == 200
+    ws_token = ws_response.json()["token"]
+    assert ws_token
+
+    # Un token reserve au WebSocket ne doit pas authentifier une route HTTP.
+    denied = await client.get(
+        "/api/v1/auth/me",
+        headers={"Authorization": f"Bearer {ws_token}"},
+    )
+    assert denied.status_code == 401
+
 
 @pytest.mark.asyncio
 async def test_register_duplicate(client):
@@ -544,9 +561,16 @@ def test_websocket_chat_broadcast(engine):
         assert cb.status_code == 201, cb.text
         cb_id = cb.json()["id"]
 
+        ws_token_response = tc.post(
+            "/api/v1/auth/ws-token",
+            headers=owner_headers,
+        )
+        assert ws_token_response.status_code == 200
+        ws_token = ws_token_response.json()["token"]
+
         with tc.websocket_connect(
             f"/api/v1/cookbooks/{cb_id}/ws",
-            subprotocols=[f"bearer.{owner_token}"],
+            subprotocols=[f"bearer.{ws_token}"],
         ) as ws_owner:
             ws_owner.send_json({"content": "Bonjour equipe"})
             recv_owner = ws_owner.receive_json()

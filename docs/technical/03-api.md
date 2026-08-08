@@ -11,7 +11,9 @@ Documentation interactive : `http://localhost:8765/docs` (Swagger UI)
 | POST | `/auth/login` | Connexion, renvoie `{access_token, user}` |
 | GET | `/auth/me` | Profil de l utilisateur connecte |
 | GET | `/auth/oauth/{provider}/login` | Redirige vers Google/GitHub |
-| GET | `/auth/oauth/{provider}/callback` | Callback OAuth, redirige vers le front avec token |
+| GET | `/auth/oauth/{provider}/callback` | Callback OAuth, redirige vers le front avec un code opaque a usage unique |
+| POST | `/auth/exchange` | Echange le code OAuth a usage unique contre la session authentifiee |
+| POST | `/auth/ws-token` | Genere un token ephemere reserve a la connexion WebSocket |
 
 ## Utilisateurs
 

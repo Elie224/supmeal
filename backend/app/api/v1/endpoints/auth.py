@@ -10,7 +10,12 @@ from app.core.config import get_settings as _auth_settings
 from app.core.deps import CurrentUser, get_db
 from app.core.pwned import is_pwned
 from app.core.ratelimit import login_limiter, register_limiter
-from app.core.security import create_access_token, hash_password, verify_password
+from app.core.security import (
+    create_access_token,
+    create_websocket_token,
+    hash_password,
+    verify_password,
+)
 from app.models.user import AuthProvider, User
 from app.schemas.user import (
     LoginRequest,
@@ -132,6 +137,16 @@ async def login(payload: LoginRequest, request: Request, db: AsyncSession = Depe
     resp = JSONResponse(content=body)
     _set_auth_cookies(resp, token, settings)
     return resp
+
+
+@router.post("/ws-token")
+async def websocket_token(
+    current_user: CurrentUser,
+) -> dict[str, str]:
+    """Genere un JWT ephemere reserve a la connexion WebSocket."""
+    return {
+        "token": create_websocket_token(current_user.id),
+    }
 
 
 @router.get("/me", response_model=UserRead)

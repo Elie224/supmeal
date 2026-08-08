@@ -15,7 +15,7 @@ En tant que createur, sur l onglet **Membres** d un cookbook :
 
 1. Saisissez l email de la personne a inviter.
 2. Choisissez son role :
-   - **Lecteur** : peut voir les recettes et la discussion, ne peut ni commenter ni envoyer de messages.
+   - **Lecteur** : peut voir les recettes et participer a la discussion, mais ne peut pas commenter les recettes ni modifier le contenu.
    - **Commentateur** : peut commenter les recettes et envoyer des messages.
    - **Editeur** : peut ajouter, modifier et supprimer les recettes.
 3. Cliquez sur **Inviter**. La personne doit deja avoir un compte SUPMEAL avec cet email.
@@ -26,14 +26,14 @@ En tant que createur, sur l onglet **Membres** d un cookbook :
 |--------|---------|--------------|---------|----------|
 | Voir les recettes | oui | oui | oui | oui |
 | Commenter | non | oui | oui | oui |
-| Envoyer des messages | non | oui | oui | oui |
+| Envoyer des messages | oui | oui | oui | oui |
 | Ajouter / modifier une recette | non | non | oui | oui |
 | Inviter / modifier les membres | non | non | non | oui |
 | Supprimer le cookbook | non | non | non | oui |
 
 ## Discussion
 
-L onglet **Discussion** affiche un chat en temps reel pour tous les membres du cookbook (sauf les lecteurs). Les messages sont persistes et consultables a tout moment.
+L onglet **Discussion** affiche un chat en temps reel accessible a tous les membres du cookbook, y compris les lecteurs. Les messages sont persistes et consultables a tout moment.
 
 ## Commentaires sur une recette
 

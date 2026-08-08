@@ -21,4 +21,4 @@ Cliquez sur **Planning** dans la barre laterale. Le planning s affiche sous form
 2. Cliquez sur **Generer la liste de courses** en haut a droite.
 3. SUPMEAL agrege automatiquement tous les ingredients des recettes planifiees, ajuste les quantites selon les portions et cree une liste de courses.
 
-Vous retrouverez vos listes de courses dans la section dediee (accessible depuis les parametres dans cette version, integration complete dans une prochaine mise a jour).
+Vous retrouverez vos listes de courses dans la section **Courses**, accessible directement depuis la barre laterale.

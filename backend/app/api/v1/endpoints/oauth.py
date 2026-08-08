@@ -113,13 +113,13 @@ async def oauth_login(provider: str, request: Request):
         raise HTTPException(status_code=501, detail=f"OAuth {provider} non configure")
     if provider not in {"google", "github"}:
         raise HTTPException(status_code=400, detail="Provider inconnu")
-    # Utilise l'hote courant (local/prod) et respecte le schema externe
-    # via les headers proxy pour eviter les mismatch http/https en production.
-    forwarded_proto = (request.headers.get("x-forwarded-proto") or "").split(",")[0].strip()
-    forwarded_host = (request.headers.get("x-forwarded-host") or "").split(",")[0].strip()
-    scheme = forwarded_proto or request.url.scheme
-    host = forwarded_host or request.headers.get("host") or request.url.hostname or "localhost"
-    redirect_uri = f"{scheme}://{host}/api/v1/auth/oauth/{provider}/callback"
+    # Utilise l'URL publique du frontend comme origine canonique.
+    # En production, Netlify relaie /api/* vers le backend Fly.io.
+    frontend_origin = settings.app_url.rstrip("/")
+    redirect_uri = (
+        f"{frontend_origin}"
+        f"/api/v1/auth/oauth/{provider}/callback"
+    )
     client = getattr(oauth, provider)
     return await client.authorize_redirect(request, redirect_uri)
 

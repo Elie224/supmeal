@@ -21,7 +21,6 @@ export default function OAuthCallbackPage() {
 
     // Nouveau flux securise : on recoit ?code=XXX, on l echange contre un JWT via POST /auth/exchange.
     const code = params.get("code");
-    const legacyToken = params.get("token");
 
     if (code) {
       const fallback = window.setTimeout(() => {
@@ -34,9 +33,7 @@ export default function OAuthCallbackPage() {
         .post("/auth/exchange", { code })
         .then((res) => {
           window.clearTimeout(fallback);
-          const token = res.data.access_token;
           const user = res.data.user;
-          localStorage.setItem("supmeal_token", token);
           setUser({
             id: user.id,
             email: user.email,
@@ -57,26 +54,6 @@ export default function OAuthCallbackPage() {
 
           navigate("/login", { replace: true });
         });
-      return;
-    }
-
-    // Ancien flux (fallback compatibilite)
-    if (legacyToken) {
-      localStorage.setItem("supmeal_token", legacyToken);
-      api
-        .get("/auth/me")
-        .then(({ data }) => {
-          setUser({
-            id: data.id,
-            email: data.email,
-            username: data.username,
-            full_name: data.full_name,
-            avatar_url: data.avatar_url,
-            role: data.role,
-          });
-          navigate("/", { replace: true });
-        })
-        .catch(() => navigate("/login", { replace: true }));
       return;
     }
 

@@ -83,27 +83,75 @@ export default function CookbookPage() {
   });
 
   useEffect(() => {
-    if (tab === "discussion" && id) {
-      const token = localStorage.getItem("supmeal_token");
-      const apiBase = import.meta.env.VITE_API_URL || "/api/v1";
-      const wsBase = apiBase.startsWith("http")
-        ? apiBase.replace(/^http/, "ws")
-        : `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}${apiBase}`;
-      const wsUrl = `${wsBase}/cookbooks/${id}/ws`;
-      const ws = token ? new WebSocket(wsUrl, [`bearer.${token}`]) : new WebSocket(wsUrl);
-      ws.onopen = () => setWsConnected(true);
-      ws.onerror = () => setWsConnected(false);
-      ws.onclose = () => setWsConnected(false);
-      ws.onmessage = (ev) => {
-        const msg: Message = JSON.parse(ev.data);
-        setLiveMessages((prev) => [...prev, msg]);
-      };
-      wsRef.current = ws;
-      return () => {
-        ws.close();
-        setWsConnected(false);
-      };
-    }
+    if (tab !== "discussion" || !id) return;
+
+    let cancelled = false;
+    let socket: WebSocket | null = null;
+
+    const connect = async () => {
+      try {
+        const { data } = await api.post<{ token: string }>(
+          "/auth/ws-token"
+        );
+
+        if (cancelled) return;
+
+        const apiBase =
+          import.meta.env.VITE_API_URL || "/api/v1";
+        const configuredWsBase =
+          import.meta.env.VITE_WS_URL?.replace(/\/$/, "");
+
+        let wsBase: string;
+
+        if (configuredWsBase) {
+          wsBase = configuredWsBase;
+        } else if (apiBase.startsWith("http")) {
+          wsBase = apiBase.replace(/^http/, "ws");
+        } else {
+          const protocol =
+            window.location.protocol === "https:" ? "wss" : "ws";
+          wsBase =
+            `${protocol}://${window.location.host}${apiBase}`;
+        }
+
+        const wsUrl = `${wsBase}/cookbooks/${id}/ws`;
+
+        socket = new WebSocket(
+          wsUrl,
+          [`bearer.${data.token}`]
+        );
+
+        wsRef.current = socket;
+
+        socket.onopen = () => setWsConnected(true);
+        socket.onerror = () => setWsConnected(false);
+        socket.onclose = () => setWsConnected(false);
+        socket.onmessage = (ev) => {
+          const msg: Message = JSON.parse(ev.data);
+          setLiveMessages((prev) => [...prev, msg]);
+        };
+      } catch {
+        if (!cancelled) {
+          setWsConnected(false);
+        }
+      }
+    };
+
+    void connect();
+
+    return () => {
+      cancelled = true;
+
+      if (socket) {
+        socket.close();
+      }
+
+      if (wsRef.current === socket) {
+        wsRef.current = null;
+      }
+
+      setWsConnected(false);
+    };
   }, [tab, id]);
 
   useEffect(() => {

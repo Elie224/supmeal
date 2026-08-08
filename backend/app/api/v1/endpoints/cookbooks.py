@@ -16,6 +16,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.config import get_settings
 from app.core.deps import CurrentUser, get_db
 from app.models.cookbook import (
     Cookbook,
@@ -589,7 +590,7 @@ async def post_message(
 # ---------- WebSocket chat ----------
 
 # Vide par defaut (tests). En prod, remplir avec les origines frontend autorisees.
-_ALLOWED_WS_ORIGINS: set = set()
+_ALLOWED_WS_ORIGINS: set[str] = set(get_settings().cors_origins_list)
 
 
 def _extract_ws_token(websocket) -> str | None:
@@ -649,7 +650,11 @@ async def websocket_chat(websocket, cookbook_id: str):
         return
     from app.core.security import decode_access_token
     payload = decode_access_token(token)
-    if not payload or "sub" not in payload:
+    if (
+        not payload
+        or "sub" not in payload
+        or payload.get("type") != "ws"
+    ):
         await websocket.close(code=4401)
         return
     user_id = int(payload["sub"])

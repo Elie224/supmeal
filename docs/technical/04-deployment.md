@@ -11,7 +11,7 @@
 
 ```bash
 # 1. Cloner le projet
-git clone <url> supmeal
+git clone https://github.com/Elie224/supmeal.git supmeal
 cd supmeal
 
 # 2. Copier le fichier d environnement
@@ -53,8 +53,8 @@ Au premier lancement, les migrations Alembic sont executees automatiquement et l
 Providers implementes dans le projet: Google et GitHub.
 Pour activer un provider OAuth, creer une application sur la plateforme correspondante et renseigner les variables d environnement. Si un provider n est pas configure, ses routes renvoient 501.
 
-Le backend genere dynamiquement la callback OAuth selon l hote courant (local/prod).
-Cela permet d utiliser les memes credentials Google sur plusieurs environnements si toutes les callbacks sont enregistrees chez le provider.
+Le backend construit la callback OAuth a partir de `APP_URL`.
+En production, les appels HTTP `/api/*` transitent par Netlify vers Fly.io.
 
 Configuration locale recommandee:
 
@@ -64,11 +64,11 @@ Configuration locale recommandee:
 Valeurs a enregistrer chez les providers:
 
 - Google Cloud Console
-    - Authorized redirect URI (local): `http://localhost:8765/api/v1/auth/oauth/google/callback`
-    - Authorized redirect URI (prod): `https://supmeal-api-elisee.fly.dev/api/v1/auth/oauth/google/callback`
+    - Authorized redirect URI (local): `http://localhost:5173/api/v1/auth/oauth/google/callback`
+    - Authorized redirect URI (prod): `https://supmeal-web-elisee.netlify.app/api/v1/auth/oauth/google/callback`
     - Authorized JavaScript origins: `http://localhost:5173`, `https://supmeal-web-elisee.netlify.app`
 - GitHub OAuth App
-    - Authorization callback URL (prod): `https://supmeal-api-elisee.fly.dev/api/v1/auth/oauth/github/callback`
+    - Authorization callback URL (prod): `https://supmeal-web-elisee.netlify.app/api/v1/auth/oauth/github/callback`
     - Note: GitHub OAuth App n accepte qu une seule callback URL. Pour supporter local + prod en meme temps, creer 2 OAuth Apps GitHub (une locale, une prod).
 
 Verification rapide:
@@ -163,7 +163,8 @@ netlify sites:create --name supmeal-web-elisee
 netlify link --name supmeal-web-elisee
 
 # URL API de production
-netlify env:set VITE_API_URL https://supmeal-api-elisee.fly.dev/api/v1
+netlify env:set VITE_API_URL /api/v1
+netlify env:set VITE_WS_URL wss://supmeal-api-elisee.fly.dev/api/v1
 
 # Deploiement prod
 netlify deploy --prod

@@ -40,11 +40,6 @@ export const api = axios.create({
 });
 
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
-  // En dev (Swagger / tests), on garde le Bearer via localStorage en fallback
-  const token = localStorage.getItem("supmeal_token");
-  if (token && config.headers) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
   // CSRF double-submit : sur les requetes mutantes, on envoie le cookie supmeal_csrf en header
   const method = (config.method || "get").toLowerCase();
   if (["post", "put", "patch", "delete"].includes(method)) {
@@ -68,7 +63,6 @@ api.interceptors.response.use(
   (error: AxiosError) => {
     if (error.response?.status === 401) {
       // Purge local + redirection
-      localStorage.removeItem("supmeal_token");
       if (!window.location.pathname.startsWith("/login")) {
         window.location.href = "/login";
       }

@@ -108,17 +108,23 @@ async def test_oauth_provider_and_login_paths(client, monkeypatch):
         "github": True,
     }
 
+    monkeypatch.setattr(
+        oauth_module.settings,
+        "app_url",
+        "https://frontend.example.com",
+    )
+
     login = await client.get(
         "/api/v1/auth/oauth/google/login",
         headers={
             "x-forwarded-proto": "https",
-            "x-forwarded-host": "supmeal.example.com",
+            "x-forwarded-host": "proxy.example.com",
         },
     )
 
     assert login.status_code in (302, 307)
     assert captured["redirect_uri"] == (
-        "https://supmeal.example.com"
+        "https://frontend.example.com"
         "/api/v1/auth/oauth/google/callback"
     )
 

@@ -168,7 +168,11 @@ async def app_websocket_chat(websocket: _WebSocket, cookbook_id: str):
         await websocket.close(code=4401)
         return
     payload = _decode(token)
-    if not payload or "sub" not in payload:
+    if (
+        not payload
+        or "sub" not in payload
+        or payload.get("type") != "ws"
+    ):
         await websocket.close(code=4401)
         return
     user_id = int(payload["sub"])
