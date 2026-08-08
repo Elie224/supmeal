@@ -22,7 +22,7 @@ cp .env.example .env
 python -c "import secrets; print(secrets.token_urlsafe(64))"
 
 # 5. Lancer l application (inclut Mailpit de dev)
-docker compose --profile dev up --build
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 ```
 
 L application est accessible sur :
@@ -106,7 +106,7 @@ Mailpit est expose sur:
 
 Procedure de verification locale:
 
-1. Lancer les services: `docker compose --profile dev up -d --build`
+1. Lancer les services: `docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build`
 2. Creer un compte (ou tenter un login sur un compte non verifie)
 3. Ouvrir `http://localhost:8025`
 4. Recuperer le code recu et le saisir dans l ecran "Verifier votre email"
@@ -186,7 +186,7 @@ Puis renseigner toutes les valeurs sensibles (secrets, mot de passe DB, credenti
 Demarrage sans Mailpit:
 
 ```bash
-docker compose up -d --build
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 ```
 
 ### Build optimise du frontend
@@ -197,7 +197,7 @@ npm install
 npm run build
 ```
 
-Le bundle statique est genere dans `frontend/dist/`. A servir par un reverse-proxy (Nginx, Caddy) ou directement par un serveur FastAPI separé.
+Le bundle statique est genere dans `frontend/dist/`. A servir par un reverse-proxy (Nginx, Caddy) ou directement par un serveur FastAPI separÃ©.
 
 ### Reverse proxy Nginx (exemple)
 
@@ -266,5 +266,5 @@ docker compose logs -f db
 ## Troubleshooting
 
 - **Port deja utilise** : changer les ports dans `docker-compose.yml`.
-- **Migrations echouees** : `docker compose down -v` puis `docker compose up --build` (ATTENTION : supprime les donnees).
+- **Migrations echouees** : `docker compose -f docker-compose.yml -f docker-compose.dev.yml down -v` puis `docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build` (ATTENTION : supprime les donnees).
 - **WebSocket KO** : verifier que le reverse proxy supporte `Upgrade: websocket`.

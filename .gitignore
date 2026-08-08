@@ -34,6 +34,7 @@ volumes/
 .coverage
 htmlcov/
 # Uploads
+backend/uploads/
 server/uploads/
 web/public/uploads/
 # OS

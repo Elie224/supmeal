@@ -11,7 +11,7 @@ Alternative a Mealie, Tandoor Recipes, Paprika : creer, importer, organiser et p
 - **Backend** : Python 3.12, FastAPI, SQLAlchemy 2 (async), Alembic, PostgreSQL 16
 - **Frontend** : React 18, Vite, TypeScript, TailwindCSS, shadcn/ui
 - **Realtime** : WebSocket natif FastAPI (chat cookbook)
-- **Auth** : authentification locale JWT + OAuth2 (Google, GitHub) via Authlib. La feuille de route mentionne OAuth2 au sens large (Google, Microsoft, GitHub, etc.). Microsoft et tout autre provider OpenID Connect peuvent etre ajoutes via la meme couche Authlib (provider deja enregistre dans pp/api/v1/endpoints/oauth.py).
+- **Auth** : authentification locale JWT + OAuth2 (Google, GitHub) via Authlib. La feuille de route mentionne OAuth2 au sens large (Google, Microsoft, GitHub, etc.). Microsoft et tout autre provider OpenID Connect peuvent etre ajoutes via la meme couche Authlib (provider deja enregistre dans app/api/v1/endpoints/oauth.py).
 - **Recherche** : PostgreSQL Full Text Search (tsvector + pg_trgm)
 - **Conteneurisation** : Docker + docker-compose
 

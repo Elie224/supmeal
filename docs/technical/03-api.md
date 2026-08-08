@@ -69,8 +69,8 @@ Roles : `creator`, `editor`, `commentator`, `reader`.
 | Methode | Endpoint | Description |
 |---------|----------|-------------|
 | GET | `/cookbooks/{id}/messages` | Historique (pagination `before_id`) |
-| POST | `/cookbooks/{id}/messages` | Envoyer un message (sauf lecteurs) |
-| WS | `/cookbooks/ws/{id}?token=...` | Chat en temps reel |
+| POST | `/cookbooks/{id}/messages` | Envoyer un message (tous les membres, y compris `reader`) |
+| WS | `/cookbooks/{id}/ws` | Chat en temps reel (token via sous-protocol `bearer.<token>`, cookie httpOnly ou header Authorization) |
 
 ## Commentaires recette
 
