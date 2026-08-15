@@ -55,7 +55,9 @@ def _redirect_uri_for_provider(provider: str) -> str:
         else settings.github_redirect_uri
     )
     explicit = (explicit or "").strip()
-    if explicit:
+    local_default = f"http://localhost:5173/api/v1/auth/oauth/{provider}/callback"
+    local_default_alt = f"http://127.0.0.1:5173/api/v1/auth/oauth/{provider}/callback"
+    if explicit and explicit not in {local_default, local_default_alt}:
         return explicit
 
     frontend_origin = settings.app_url.rstrip("/")
