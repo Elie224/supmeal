@@ -53,12 +53,12 @@ class Settings(BaseSettings):
     # OAuth2 - Google
     google_client_id: str = ""
     google_client_secret: str = ""
-    google_redirect_uri: str = "http://localhost:5173/api/v1/auth/oauth/google/callback"
+    google_redirect_uri: str = ""
 
     # OAuth2 - GitHub
     github_client_id: str = ""
     github_client_secret: str = ""
-    github_redirect_uri: str = "http://localhost:5173/api/v1/auth/oauth/github/callback"
+    github_redirect_uri: str = ""
 
     # SMTP - Verification email
     smtp_host: str = ""
