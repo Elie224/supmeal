@@ -5,7 +5,7 @@ import { Heart, Calendar, ArrowLeft, Trash2, Pencil } from "lucide-react";
 import { api, resolveMediaUrl } from "../lib/api";
 import { useAuthStore } from "../stores/auth";
 import { formatDuration, cn } from "../lib/utils";
-import type { Recipe } from "../lib/types";
+import type { Cookbook, Recipe } from "../lib/types";
 
 export default function RecipePage() {
   const { id } = useParams<{ id: string }>();
@@ -27,6 +27,12 @@ export default function RecipePage() {
     queryKey: ["comments", id],
     queryFn: async () => (await api.get(`/recipes/${id}/comments`)).data,
     enabled: !!id,
+  });
+
+  const cookbookQ = useQuery({
+    queryKey: ["cookbook-for-recipe", recipeQ.data?.cookbook_id],
+    queryFn: async () => (await api.get<Cookbook>(`/cookbooks/${recipeQ.data?.cookbook_id}`)).data,
+    enabled: !!recipeQ.data?.cookbook_id,
   });
 
   const fav = useMutation({
@@ -70,6 +76,9 @@ export default function RecipePage() {
 
   const r = recipeQ.data;
   const isOwner = user?.id === r.owner_id;
+  const myCookbookRole = cookbookQ.data?.members.find((m) => m.user.id === user?.id)?.role;
+  const isCookbookEditor = myCookbookRole === "creator" || myCookbookRole === "editor";
+  const canEditRecipe = isOwner || (!!r.cookbook_id && isCookbookEditor);
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -85,7 +94,7 @@ export default function RecipePage() {
           <button className="btn-outline" type="button" onClick={() => setShowPlanForm(true)}>
             <Calendar className="w-4 h-4" /> Planifier
           </button>
-          {isOwner && (
+          {canEditRecipe && (
             <>
               <Link to={`/recipes/${r.id}/edit`} className="btn-outline">
                 <Pencil className="w-4 h-4" /> Editer

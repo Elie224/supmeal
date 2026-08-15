@@ -18,6 +18,7 @@ export default function CookbookPage() {
   const [search, setSearch] = useState("");
   const [ingredient, setIngredient] = useState("");
   const [maxPrep, setMaxPrep] = useState<number | "">("");
+  const [maxCook, setMaxCook] = useState<number | "">("");
   const [favOnly, setFavOnly] = useState(false);
   const [tagFilter, setTagFilter] = useState<number | null>(null);
   const [tagCategoryFilter, setTagCategoryFilter] = useState<string>("");
@@ -47,12 +48,13 @@ export default function CookbookPage() {
   });
 
   const recipesQ = useQuery({
-    queryKey: ["cookbook-recipes", id, search, ingredient, maxPrep, favOnly, tagFilter, tagCategoryFilter],
+    queryKey: ["cookbook-recipes", id, search, ingredient, maxPrep, maxCook, favOnly, tagFilter, tagCategoryFilter],
     queryFn: async () => {
       const params: Record<string, unknown> = {
         search: search || undefined,
         ingredient: ingredient || undefined,
         max_prep_time: maxPrep === "" ? undefined : maxPrep,
+        max_cook_time: maxCook === "" ? undefined : maxCook,
         favorites_only: favOnly || undefined,
         tag_ids: tagFilter ? [tagFilter] : undefined,
         tag_category: tagCategoryFilter || undefined,
@@ -294,7 +296,7 @@ export default function CookbookPage() {
 
       {tab === "recipes" && (
         <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-2">
             <div className="relative md:col-span-2">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-charcoal-500" />
               <input className="input pl-9" placeholder="Recherche plein texte" value={search} onChange={(e) => setSearch(e.target.value)} />
@@ -307,6 +309,14 @@ export default function CookbookPage() {
               placeholder="Prep max (min)"
               value={maxPrep}
               onChange={(e) => setMaxPrep(e.target.value ? Number(e.target.value) : "")}
+            />
+            <input
+              className="input"
+              type="number"
+              min={0}
+              placeholder="Cuisson max (min)"
+              value={maxCook}
+              onChange={(e) => setMaxCook(e.target.value ? Number(e.target.value) : "")}
             />
             <button type="button" className="btn-outline" onClick={() => setFavOnly((v) => !v)}>
               {favOnly ? "Favoris: ON" : "Favoris: OFF"}

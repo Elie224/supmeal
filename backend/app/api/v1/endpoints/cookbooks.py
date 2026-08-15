@@ -413,6 +413,7 @@ async def list_cookbook_recipes(
     tag_category: str | None = None,
     ingredient: str | None = None,
     max_prep_time: int | None = None,
+    max_cook_time: int | None = None,
     favorites_only: bool = False,
     skip: int = 0,
     limit: int = 50,
@@ -467,6 +468,8 @@ async def list_cookbook_recipes(
         )
     if max_prep_time is not None:
         stmt = stmt.where(Recipe.prep_time_minutes <= max_prep_time)
+    if max_cook_time is not None:
+        stmt = stmt.where(Recipe.cook_time_minutes <= max_cook_time)
     stmt = stmt.order_by(Recipe.updated_at.desc()).offset(skip).limit(limit)
     result = await db.execute(stmt)
     recipes = result.scalars().unique().all()

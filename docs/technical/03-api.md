@@ -53,7 +53,7 @@ Exemple : `GET /recipes?search=tarte&max_prep_time=30&favorites_only=true&tag_id
 | GET | `/cookbooks/{id}` | Detail avec membres |
 | PATCH | `/cookbooks/{id}` | Modifier (createur uniquement) |
 | DELETE | `/cookbooks/{id}` | Supprimer (createur uniquement) |
-| GET | `/cookbooks/{id}/recipes` | Recettes du cookbook (avec filtres) |
+| GET | `/cookbooks/{id}/recipes` | Recettes du cookbook (filtres: `search`, `tag_ids`, `tag_category`, `ingredient`, `max_prep_time`, `max_cook_time`, `favorites_only`, `skip`, `limit`) |
 | POST | `/cookbooks/{id}/recipes` | Ajouter une recette au cookbook |
 
 ## Membres d un cookbook
