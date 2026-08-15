@@ -47,6 +47,21 @@ def _is_provider_configured(provider: str) -> bool:
     return getattr(oauth, provider, None) is not None
 
 
+def _redirect_uri_for_provider(provider: str) -> str:
+    """Retourne l'URI de callback OAuth pour le provider, avec fallback sur APP_URL."""
+    explicit = (
+        settings.google_redirect_uri
+        if provider == "google"
+        else settings.github_redirect_uri
+    )
+    explicit = (explicit or "").strip()
+    if explicit:
+        return explicit
+
+    frontend_origin = settings.app_url.rstrip("/")
+    return f"{frontend_origin}/api/v1/auth/oauth/{provider}/callback"
+
+
 @router.get("/providers")
 async def oauth_providers() -> dict[str, bool]:
     """Expose l'etat de configuration OAuth pour le frontend."""
@@ -113,13 +128,9 @@ async def oauth_login(provider: str, request: Request):
         raise HTTPException(status_code=501, detail=f"OAuth {provider} non configure")
     if provider not in {"google", "github"}:
         raise HTTPException(status_code=400, detail="Provider inconnu")
-    # Utilise l'URL publique du frontend comme origine canonique.
-    # En production, Netlify relaie /api/* vers le backend Fly.io.
-    frontend_origin = settings.app_url.rstrip("/")
-    redirect_uri = (
-        f"{frontend_origin}"
-        f"/api/v1/auth/oauth/{provider}/callback"
-    )
+    # Priorite a GOOGLE_REDIRECT_URI / GITHUB_REDIRECT_URI,
+    # sinon fallback APP_URL + callback proxifiee via /api.
+    redirect_uri = _redirect_uri_for_provider(provider)
     client = getattr(oauth, provider)
     return await client.authorize_redirect(request, redirect_uri)
 

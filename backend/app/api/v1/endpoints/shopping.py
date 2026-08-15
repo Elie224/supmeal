@@ -74,6 +74,23 @@ async def _get_owned_item_or_404(
     return item
 
 
+async def _load_ingredients_by_recipe_id(
+    db: AsyncSession,
+    recipe_ids: list[int],
+) -> dict[int, list[RecipeIngredient]]:
+    """Charge tous les ingredients des recettes en une seule requete."""
+    if not recipe_ids:
+        return {}
+
+    result = await db.execute(
+        select(RecipeIngredient).where(RecipeIngredient.recipe_id.in_(recipe_ids))
+    )
+    by_recipe: dict[int, list[RecipeIngredient]] = defaultdict(list)
+    for ing in result.scalars().all():
+        by_recipe[ing.recipe_id].append(ing)
+    return by_recipe
+
+
 @router.post("/generate", status_code=201)
 async def generate_shopping_list(
     payload: GenerateListRequest,
@@ -111,15 +128,15 @@ async def generate_shopping_list(
     if not rows:
         raise HTTPException(status_code=404, detail="Aucun repas planifie sur cette periode")
 
+    recipe_ids = list({recipe.id for _, recipe in rows})
+    ingredients_by_recipe = await _load_ingredients_by_recipe_id(db, recipe_ids)
+
     # Collecter tous les ingredients
     aggregated: dict[tuple[str, str | None], float] = defaultdict(float)
     for mp, recipe in rows:
         # Ajuster les quantites en fonction des servings
         factor = (mp.servings or 1) / max(recipe.servings or 1, 1)
-        ing_result = await db.execute(
-            select(RecipeIngredient).where(RecipeIngredient.recipe_id == recipe.id)
-        )
-        for ing in ing_result.scalars().all():
+        for ing in ingredients_by_recipe.get(recipe.id, []):
             key = (ing.name.lower().strip(), ing.unit)
             qty = (ing.quantity or 0) * factor
             aggregated[key] += qty

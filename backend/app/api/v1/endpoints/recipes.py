@@ -21,7 +21,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.config import get_settings
 from app.core.deps import CurrentUser, _get_optional_user, get_db
-from app.core.security_utils import safe_image_extension, sniff_image
+from app.core.security_utils import escape_like, safe_image_extension, sniff_image
 from app.models.cookbook import CookbookMember, CookbookRole
 from app.models.recipe import (
     Comment,
@@ -180,6 +180,9 @@ async def list_recipes(
     limit: int = Query(20, ge=1, le=100),
 ) -> list[RecipeSummary]:
     """Liste paginee + filtres + recherche plein texte (PostgreSQL FTS)."""
+    safe_search = (search or "").strip()[:120] or None
+    safe_ingredient = (ingredient or "").strip()[:80] or None
+
     stmt = select(Recipe).options(selectinload(Recipe.tags))
 
     conditions = []
@@ -204,11 +207,12 @@ async def list_recipes(
     if max_cook_time is not None:
         conditions.append(Recipe.cook_time_minutes <= max_cook_time)
 
-    if ingredient:
+    if safe_ingredient:
         # Recherche ingredient insensible a la casse
+        ingredient_like = f"%{escape_like(safe_ingredient)}%"
         ingredient_subq = (
             select(RecipeIngredient.recipe_id)
-            .where(RecipeIngredient.name.ilike(f"%{ingredient}%"))
+            .where(RecipeIngredient.name.ilike(ingredient_like, escape="\\"))
             .distinct()
         )
         conditions.append(Recipe.id.in_(ingredient_subq))
@@ -237,13 +241,14 @@ async def list_recipes(
         )
         conditions.append(Recipe.id.in_(category_subq))
 
-    if search:
+    if safe_search:
         # Recherche plein texte + trigram en fallback
-        ts_query = func.websearch_to_tsquery("french", search)
+        ts_query = func.websearch_to_tsquery("french", safe_search)
+        title_like = f"%{escape_like(safe_search)}%"
         conditions.append(
             or_(
                 Recipe.search_vector.op("@@")(ts_query),
-                Recipe.title.ilike(f"%{search}%"),
+                Recipe.title.ilike(title_like, escape="\\"),
             )
         )
 
@@ -531,7 +536,7 @@ async def suggest_recipes(
       4. Score final = matched / total_ingredients ; tri par score desc, puis
          nombre d ingredients manquants croissant, puis duree totale croissante.
     """
-    have = [_normalize_text(ing) for ing in payload.ingredients]
+    have = [_normalize_text(ing)[:80] for ing in payload.ingredients]
     have = [h for h in have if h]
     if not have:
         return []
@@ -565,8 +570,9 @@ async def suggest_recipes(
     # Pre-filtre SQL : au moins un ingredient matche (ILIKE sur le nom normalise).
     # On tente d utiliser `unaccent` cote PG ; il est protege par un fallback ILIKE simple.
     try:
+        escaped_have = [escape_like(h) for h in have]
         like_clauses = [
-            func.unaccent(RecipeIngredient.name).ilike(f"%{h}%") for h in have
+            func.unaccent(RecipeIngredient.name).ilike(f"%{h}%", escape="\\") for h in escaped_have
         ]
         ingredient_match_subq = (
             select(RecipeIngredient.recipe_id)
@@ -574,9 +580,17 @@ async def suggest_recipes(
             .distinct()
         )
     except Exception:
+        escaped_have = [escape_like(h) for h in have]
         ingredient_match_subq = (
             select(RecipeIngredient.recipe_id)
-            .where(or_(*[RecipeIngredient.name.ilike(f"%{h}%") for h in have]))
+            .where(
+                or_(
+                    *[
+                        RecipeIngredient.name.ilike(f"%{h}%", escape="\\")
+                        for h in escaped_have
+                    ]
+                )
+            )
             .distinct()
         )
     stmt = stmt.where(Recipe.id.in_(ingredient_match_subq))

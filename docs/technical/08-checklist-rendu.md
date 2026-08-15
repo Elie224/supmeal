@@ -16,6 +16,11 @@
 
 - Verifier qu aucun secret reel n est commite.
 - Verifier que l archive de rendu ne contient pas `.env` (uniquement `.env.example`).
+- Generer le zip depuis Git (et non depuis l explorateur):
+  - `make package` ou `make package-prod`
+  - Sous Windows sans `make`:
+    - `powershell -ExecutionPolicy Bypass -Command "$repo='.'; $dist=Join-Path $repo 'dist'; New-Item -ItemType Directory -Force -Path $dist | Out-Null; $name=(git -C $repo rev-parse --short HEAD); $zip=Join-Path $dist ('supmeal-'+$name+'.zip'); git -C $repo archive --format=zip --output=$zip HEAD; Write-Output $zip"`
+  - Cette methode archive uniquement les fichiers suivis par Git (pas de `.env` local, pas de fichiers temporaires non suivis).
 - Confirmer les en-tetes de securite actifs.
 - Confirmer CORS sans wildcard avec cookies.
 - Verifier hashing mot de passe et absence de `hashed_password` dans les reponses API.
@@ -54,4 +59,6 @@
 - Tests backend local: `cd backend && python -m pytest -q`
 - Stop stack: `docker compose down`
 - Stop + volumes: `docker compose down -v`
+- Zip rendu propre: `make package`
+- Zip rendu avec nom versionne: `make package-prod`
 

@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.deps import CurrentUser, get_db
 from app.core.security import hash_password, verify_password
-from app.core.security_utils import safe_image_extension, sniff_image
+from app.core.security_utils import escape_like, safe_image_extension, sniff_image
 from app.models.user import User
 from app.schemas.user import PasswordChange, UserPublic, UserRead, UserUpdate
 
@@ -31,7 +31,7 @@ async def list_users(
     """Liste minimale des utilisateurs (pour inviter dans un cookbook). Auth requise."""
     stmt = select(User).order_by(User.username).limit(200)
     if q:
-        like = f"%{q[:60]}%"
+        like = f"%{escape_like(q.strip()[:60])}%"
         stmt = stmt.where((User.username.ilike(like)) | (User.email.ilike(like)))
     result = await db.execute(stmt)
     return [UserPublic.model_validate(u) for u in result.scalars().all()]

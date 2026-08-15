@@ -78,6 +78,15 @@ def is_safe_username(value: str) -> bool:
     return bool(_USERNAME_RE.match(value))
 
 
+def escape_like(value: str, escape_char: str = "\\") -> str:
+    """Echappe les caracteres speciaux SQL LIKE (% et _)."""
+    return (
+        value.replace(escape_char, escape_char * 2)
+        .replace("%", escape_char + "%")
+        .replace("_", escape_char + "_")
+    )
+
+
 def strip_html(value: str | None) -> str:
     """Supprime toutes les balises HTML / scripts pour defaut.
     Utilise pour les contenus rendus cote serveur dans le front React (defense en profondeur)."""

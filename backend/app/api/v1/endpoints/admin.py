@@ -11,6 +11,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import CurrentUser, get_db
+from app.core.security_utils import escape_like
 from app.models.cookbook import Cookbook
 from app.models.recipe import Comment, MealPlan, Recipe
 from app.models.user import User, UserRole
@@ -140,7 +141,7 @@ async def list_all_users(
     """Liste tous les utilisateurs avec filtres et pagination."""
     stmt = select(User).order_by(User.created_at.desc())
     if q:
-        like = f"%{q[:60]}%"
+        like = f"%{escape_like(q.strip()[:60])}%"
         stmt = stmt.where(or_(User.email.ilike(like), User.username.ilike(like)))
     if role is not None:
         stmt = stmt.where(User.role == role)
@@ -302,7 +303,7 @@ async def list_all_recipes(
     """Liste toutes les recettes (toutes visibilites confondues)."""
     stmt = select(Recipe).order_by(Recipe.created_at.desc())
     if q:
-        like = f"%{q[:60]}%"
+        like = f"%{escape_like(q.strip()[:60])}%"
         stmt = stmt.where(Recipe.title.ilike(like))
     if owner_id is not None:
         stmt = stmt.where(Recipe.owner_id == owner_id)

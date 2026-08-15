@@ -18,6 +18,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.config import get_settings
 from app.core.deps import CurrentUser, get_db
+from app.core.security_utils import escape_like
 from app.models.cookbook import (
     Cookbook,
     CookbookInvitation,
@@ -418,6 +419,9 @@ async def list_cookbook_recipes(
     skip: int = 0,
     limit: int = 50,
 ) -> list[RecipeRead]:
+    safe_search = (search or "").strip()[:120] or None
+    safe_ingredient = (ingredient or "").strip()[:80] or None
+
     role = await _get_member_role(db, cookbook_id, current_user.id)
     if role is None:
         raise HTTPException(status_code=403, detail="Vous n'etes pas membre de ce cookbook")
@@ -431,12 +435,13 @@ async def list_cookbook_recipes(
         )
         .where(Recipe.cookbook_id == cookbook_id)
     )
-    if search:
-        ts_query = func.websearch_to_tsquery("french", search)
+    if safe_search:
+        ts_query = func.websearch_to_tsquery("french", safe_search)
+        title_like = f"%{escape_like(safe_search)}%"
         stmt = stmt.where(
             or_(
                 Recipe.search_vector.op("@@")(ts_query),
-                Recipe.title.ilike(f"%{search}%"),
+                Recipe.title.ilike(title_like, escape="\\"),
             )
         )
     if tag_ids:
@@ -452,10 +457,11 @@ async def list_cookbook_recipes(
             .where(Tag.category == tag_category)
         )
         stmt = stmt.where(Recipe.id.in_(category_subq))
-    if ingredient:
+    if safe_ingredient:
         from app.models.recipe import RecipeIngredient
+        ingredient_like = f"%{escape_like(safe_ingredient)}%"
         ing_subq = select(RecipeIngredient.recipe_id).where(
-            RecipeIngredient.name.ilike(f"%{ingredient}%")
+            RecipeIngredient.name.ilike(ingredient_like, escape="\\")
         )
         stmt = stmt.where(Recipe.id.in_(ing_subq))
     if favorites_only:

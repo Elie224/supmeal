@@ -1,7 +1,7 @@
 # SUPMEAL - Makefile
 # Aide-memoire pour les commandes courantes
 
-.PHONY: help up down restart logs build rebuild clean test lint format shell-api shell-db seed
+.PHONY: help up down restart logs build rebuild clean test lint format shell-api shell-db seed package package-prod
 
 help: ## Afficher cette aide
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
@@ -47,3 +47,14 @@ shell-db: ## Console PostgreSQL
 
 seed: ## Creer un utilisateur de demo
 	docker compose exec backend python -c "from app.db.session import *; from app.models.user import User, AuthProvider; from app.core.security import hash_password; print('TODO')"
+
+package: ## Creer un zip de rendu propre depuis le commit courant (ignore .env local et workspace sale)
+	@mkdir -p dist
+	@git archive --format=zip --output=dist/supmeal-rendu-local.zip HEAD
+	@echo "Archive creee: dist/supmeal-rendu-local.zip"
+
+package-prod: ## Creer un zip nomme avec tag/sha (recommande pour rendu Moodle)
+	@mkdir -p dist
+	@name=$$(git describe --tags --always --dirty 2>/dev/null || git rev-parse --short HEAD); \
+	git archive --format=zip --output=dist/supmeal-$$name.zip HEAD; \
+	echo "Archive creee: dist/supmeal-$$name.zip"
